@@ -1,0 +1,12 @@
+[project]
+name = "my_method"
+
+dependencies = [
+    "nerfstudio" # you may want to consider pinning the version, ie "nerfstudio==0.1.19"
+]
+
+[tool.setuptools.packages.find]
+include = ["my_method*"]
+
+[project.entry-points.'nerfstudio.method_configs']
+my-method = 'semantic_nerfacto.semantic_nerfacto_config:semantic_nerfacto'
