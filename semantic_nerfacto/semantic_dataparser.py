@@ -368,17 +368,22 @@ class SemanticNerf(Nerfstudio):
         # --- semantics ---
         # TODO: Modify this part to correctly include semantics in the desired format
         if self.config.include_semantics:
-            empty_path = Path()
-            replace_this_path = str(empty_path / images_folder / empty_path)
-            with_this_path = str(empty_path / segmentations_folder / "thing" / empty_path)
+            print("Generating semantics in:")
+            print(self.config.data)
+            path = self.config.data
+            empty_path = Path
+            replace_this_path = str(path / images_folder / empty_path)
+            with_this_path = str(path / segmentations_folder / empty_path)
             filenames = [
                 Path(str(image_filename).replace(replace_this_path, with_this_path).replace(".jpg", ".png"))
                 for image_filename in image_filenames
             ]
             panoptic_classes = load_from_json(self.config.data / "panoptic_classes.json")
-            classes = panoptic_classes["thing"]
-            colors = torch.tensor(panoptic_classes["thing_colors"], dtype=torch.float32) / 255.0
-            semantics = Semantics(filenames=filenames, classes=classes, colors=colors)
+            thing_classes = panoptic_classes["thing"]
+            stuff_classes = panoptic_classes["stuff"]
+            thing_colors = torch.tensor(panoptic_classes["thing_colors"], dtype=torch.float32) / 255.0
+            stuff_colors = torch.tensor(panoptic_classes["stuff_colors"], dtype=torch.float32) / 255.0
+            semantics = Semantics(filenames=filenames, classes=thing_classes+stuff_classes, colors=thing_colors+stuff_colors)
 
 
         dataparser_outputs = DataparserOutputs(
