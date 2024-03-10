@@ -8,6 +8,7 @@ setup_logger()
 import torch
 import os, json, cv2, random, glob
 import click
+from rich.progress import track
 
 # import some common detectron2 utilities
 from detectron2 import model_zoo
@@ -53,8 +54,7 @@ class SemanticSegmentor():
             json.dump(metadict, f, indent=4)
 
         
-    def add_segmentation(self, data):
-        self.save_metadata(data)
+    def add_segmentation_dataset(self, data):
         assert os.path.exists(data), f"The specified directory does not exist: {data}"
         # Find a way to get these from some metadata in the dataset
         image_folder_suffixes = ['', '_2', '_4', '_8']
@@ -75,7 +75,6 @@ class SemanticSegmentor():
             for image_file in image_files:
                 # Load the image
                 image = cv2.imread(image_file)
-
                 # Perform panoptic segmentation
                 panoptic_segmentation, segments_info = self.predict(image)
                 # Ensure the segmentation is on CPU and converted to numpy
@@ -86,13 +85,24 @@ class SemanticSegmentor():
 
                 # Save the segmented image
                 cv2.imwrite(segmentation_file_path, panoptic_segmentation)
+    
+    def add_segmentation_files(self, filenames):
+        print("Generating panoptic segmentation")
+        for i in track(range(len(filenames)), description="Generating semantic images"):
+            image_filename = filenames[i]
+            image = cv2.imread(image_filename)
+
+            panoptic_seg, segments_info = self.predictor(image)["panoptic_seg"]
+
+            yield panoptic_seg
 
 
 @click.command()
 @click.option("--data", help="Path to dataset")
 def main(data):
     SS = SemanticSegmentor()
-    SS.add_segmentation(data)
+    SS.save_metadata(data)
+    SS.add_segmentation_dataset(data)
     
 
 if __name__ == "__main__":

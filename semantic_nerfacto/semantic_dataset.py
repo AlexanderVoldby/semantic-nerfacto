@@ -24,8 +24,8 @@ from typing import Dict, Union
 from semantic_nerfacto.detectron import SemanticSegmentor
 
 import torch
+import cv2
 import numpy as np
-from PIL import Image
 from rich.progress import track
 
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs, Semantics
@@ -84,16 +84,16 @@ class SemanticDataset(InputDataset):
                     filenames = dataparser_outputs.image_filenames
 
                 # TODO: Use detectron2 to generate semantics
-                Detectron = SemanticSegmentor
+                Detectron = SemanticSegmentor()
 
-                for i in track(range(len(filenames)), description="Generating semantic images"):
-                    image_filename = filenames[i]
+                # for i in track(range(len(filenames)), description="Generating semantic images"):
+                    # image_filename = filenames[i]
                     # pil_image = Image.open(image_filename)
-                    image = cv2.imread(image_filename)
+                    # image = cv2.imread(image_filename)
                     
-                    panoptic_seg, segments_info = Detectron.predictor(image)["panoptic_seg"]
+                    # panoptic_seg, segments_info = Detectron.predictor(image)["panoptic_seg"]
 
-                    semantics_tensors.append(panoptic_seg)
+                    # semantics_tensors.append(panoptic_seg)
 
                 self.semantics = torch.stack(semantics_tensors)
                 np.save(cache, self.semantics.cpu().numpy())
