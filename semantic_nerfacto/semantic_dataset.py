@@ -48,9 +48,10 @@ class SemanticDataset(InputDataset):
         super().__init__(dataparser_outputs, scale_factor)
         assert "semantics" in dataparser_outputs.metadata.keys() and isinstance(self.metadata["semantics"], Semantics)
         self.semantics = self.metadata["semantics"]
-        self.mask_indices = torch.tensor(
-            [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
-        ).view(1, 1, -1)
+        # Were not currently dealing with class masks
+        # self.mask_indices = torch.tensor(
+            # [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
+        # ).view(1, 1, -1)
     
     # if there are no semantic images than we want to generate them all with detectron2
 
@@ -84,21 +85,14 @@ class SemanticDataset(InputDataset):
 
                 # TODO: Use detectron2 to generate semantics
                 # Inference with a panoptic segmentation model
-                cfg = get_cfg()
-                cfg.merge_from_file(model_zoo.get_config_file("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml"))
-                cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml")
-                predictor = DefaultPredictor(cfg)
-                # Get a list of thing/stuf classes
-                semantics_metadata = MetadataCatalog.get(cfg.DATASETS.TRAIN[0])
-                semantics_metadata.thing_classes
-                semantics_metadata.stuff_classes
+                Detectron = SemanticSegmentor
 
                 for i in track(range(len(filenames)), description="Generating semantic images"):
                     image_filename = filenames[i]
                     # pil_image = Image.open(image_filename)
                     image = cv2.imread(image_filename)
                     
-                    panoptic_seg, segments_info = predictor(image)["panoptic_seg"]
+                    panoptic_seg, segments_info = Detectron.predictor(image)["panoptic_seg"]
 
                     semantics_tensors.append(panoptic_seg)
 
