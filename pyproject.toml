@@ -9,4 +9,5 @@ dependencies = [
 include = ["my_method*"]
 
 [project.entry-points.'nerfstudio.method_configs']
+custom-dataparser = 'semantic_nerfacto.semantic_nerfacto_config:semantic_dataparser'
 my-method = 'semantic_nerfacto.semantic_nerfacto_config:semantic_nerfacto'

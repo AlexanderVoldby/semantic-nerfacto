@@ -32,6 +32,8 @@ class SemanticDataParserConfig(NerfstudioDataParserConfig):
     # Config file for the semantic dataparser. It should already have all the functionality of the 
     # Nerfstudio dataparser so just sesmantics need to be added
     
+    _target: Type = field(default_factory=lambda: SemanticNerf)
+    """target class to instantiate"""
     include_semantics: bool = True
     """whether or not to include loading of semantics data"""
 
