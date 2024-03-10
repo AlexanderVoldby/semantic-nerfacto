@@ -84,7 +84,6 @@ class SemanticDataset(InputDataset):
                     filenames = dataparser_outputs.image_filenames
 
                 # TODO: Use detectron2 to generate semantics
-                # Inference with a panoptic segmentation model
                 Detectron = SemanticSegmentor
 
                 for i in track(range(len(filenames)), description="Generating semantic images"):
