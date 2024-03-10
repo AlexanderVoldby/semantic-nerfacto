@@ -21,22 +21,7 @@ from pathlib import Path
 from typing import Dict, Union
 
 # Import for the semantic segmentator detectron2
-# Setup detectron2 logger
-import detectron2
-from detectron2.utils.logger import setup_logger
-setup_logger()
-
-# import some common libraries
-import numpy as np
-import os, cv2, random
-from google.colab.patches import cv2_imshow
-
-# import some common detectron2 utilities
-from detectron2 import model_zoo
-from detectron2.engine import DefaultPredictor
-from detectron2.config import get_cfg
-from detectron2.utils.visualizer import Visualizer
-from detectron2.data import MetadataCatalog, DatasetCatalog
+from semantic_nerfacto.detectron import SemanticSegmentor
 
 import torch
 import numpy as np
@@ -67,20 +52,20 @@ class SemanticDataset(InputDataset):
             [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
         ).view(1, 1, -1)
     
-    # if there are no depth images than we want to generate them all with zoe depth
+    # if there are no semantic images than we want to generate them all with detectron2
 
         if len(dataparser_outputs.image_filenames) > 0 and (
             "semantics" not in dataparser_outputs.metadata.keys()
             or dataparser_outputs.metadata["semantics"] is None
         ):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            CONSOLE.print("[bold yellow] No depth data found! Generating pseudosemantics")
+            CONSOLE.print("[bold yellow] No semantics data found! Generating pseudosemantics")
 
             cache = dataparser_outputs.image_filenames[0].parent / "semantics.npy"
             # Note: this should probably be saved to disk as images, and then loaded with the dataparser.
             #  That will allow multi-gpu training.
             if cache.exists():
-                CONSOLE.print("[bold yellow] Loading semantics depth from cache!")
+                CONSOLE.print("[bold yellow] Loading semantics data from cache!")
                 # load all the depths
                 self.depths = np.load(cache)
                 self.depths = torch.from_numpy(self.depths).to(device)
