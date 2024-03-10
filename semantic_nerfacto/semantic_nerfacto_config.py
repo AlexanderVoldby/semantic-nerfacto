@@ -6,9 +6,6 @@ Define your custom method here that registers with Nerfstudio CLI.
 
 from __future__ import annotations
 
-from method_template.template_datamanager import (
-    TemplateDataManagerConfig,
-)
 from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModelConfig
 from nerfstudio.pipelines.base_pipeline import VanillaPipelineConfig
 from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManagerConfig
