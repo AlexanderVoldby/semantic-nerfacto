@@ -7,10 +7,11 @@ Define your custom method here that registers with Nerfstudio CLI.
 from __future__ import annotations
 
 from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModelConfig
-from nerfstudio.pipelines.base_pipeline import VanillaPipelineConfig
-from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManagerConfig
-from nerfstudio.configs.base_config import ViewerConfig
 from semantic_nerfacto.semantic_dataparser import SemanticDataParserConfig
+from semantic_nerfacto.semantic_nerfacto_datamanager import SemanticNerfactoDataManagerConfig
+from semantic_nerfacto.semantic_nerfacto_pipeline import SemanticNerfactoPipelineConfig
+
+from nerfstudio.configs.base_config import ViewerConfig
 from nerfstudio.engine.optimizers import AdamOptimizerConfig, RAdamOptimizerConfig
 from nerfstudio.engine.schedulers import (
     ExponentialDecaySchedulerConfig,
@@ -29,8 +30,8 @@ semantic_nerfacto = MethodSpecification(
         steps_per_save=2000,
         max_num_iterations=30000,
         mixed_precision=True,
-        pipeline=VanillaPipelineConfig(
-            datamanager=VanillaDataManagerConfig(
+        pipeline=SemanticNerfactoPipelineConfig(
+            datamanager=SemanticNerfactoDataManagerConfig(
                 dataparser=SemanticDataParserConfig(),
                 train_num_rays_per_batch=4096,
                 eval_num_rays_per_batch=4096,
