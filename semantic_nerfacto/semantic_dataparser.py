@@ -368,8 +368,6 @@ class SemanticNerf(Nerfstudio):
         # --- semantics ---
         # TODO: Modify this part to correctly include semantics in the desired format
         if self.config.include_semantics:
-            print("Generating semantics in:")
-            print(self.config.data)
             empty_path = Path()
             replace_this_path = str(empty_path / images_folder / empty_path)
             with_this_path = str(empty_path / segmentations_folder / empty_path)
@@ -382,6 +380,11 @@ class SemanticNerf(Nerfstudio):
             stuff_classes = panoptic_classes["stuff_classes"]
             thing_colors = torch.tensor(panoptic_classes["thing_colors"], dtype=torch.float32) / 255.0
             stuff_colors = torch.tensor(panoptic_classes["stuff_colors"], dtype=torch.float32) / 255.0
+            print(f"Lenght of filenames: {len(filenames)}")
+            print(filenames)
+            print(f"Length of classes: {len(thing_classes+stuff_classes)}")
+            colors = thing_colors+stuff_colors
+            print(f"Shape of colors tensor: {colors.shape}")
             semantics = Semantics(filenames=filenames, classes=thing_classes+stuff_classes, colors=thing_colors+stuff_colors)
 
 
