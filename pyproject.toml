@@ -10,5 +10,7 @@ dependencies = [
 include = ["semantic_nerfacto*"]
 
 [project.entry-points.'nerfstudio.method_configs']
-semantic_dataparser = 'semantic_nerfacto.semantic_nerfacto_config:semantic_dataparser'
 semantic_nerfacto = 'semantic_nerfacto.semantic_nerfacto_config:semantic_nerfacto'
+
+[project.entry-points.'nerfstudio.dataparser_configs']
+semantic_dataparser = 'semantic_nerfacto.semantic_nerfacto_config:semantic_dataparser'
