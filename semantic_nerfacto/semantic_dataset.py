@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """
-Semantic dataset.
+Semantic dataset. CUrrently not used as we simply create segmentations as part of the pipeline
 """
 
 import json
