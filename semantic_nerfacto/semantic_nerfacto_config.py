@@ -17,7 +17,10 @@ from nerfstudio.engine.schedulers import (
 )
 from nerfstudio.engine.trainer import TrainerConfig
 from nerfstudio.plugins.types import MethodSpecification
+from nerfstudio.plugins.registry_dataparser import DataParserSpecification
 
+
+semantic_dataparser = DataParserSpecification(config=SemanticDataParserConfig())
 
 semantic_nerfacto = MethodSpecification(
     config=TrainerConfig(
