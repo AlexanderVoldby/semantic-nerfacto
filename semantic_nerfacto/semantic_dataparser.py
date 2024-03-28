@@ -370,7 +370,7 @@ class SemanticNerf(Nerfstudio):
         if self.config.include_semantics:
             print("Generating semantics in:")
             print(self.config.data)
-            empty_path = Path
+            empty_path = Path()
             replace_this_path = str(empty_path / images_folder / empty_path)
             with_this_path = str(empty_path / segmentations_folder / empty_path)
             filenames = [
