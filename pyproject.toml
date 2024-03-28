@@ -3,7 +3,7 @@ name = "semantic_nerfacto"
 version = "0.0.0"
 
 dependencies = [
-    "nerfstudio==1.0.2"
+    "nerfstudio>=1.0.0"
 ]
 
 [tool.setuptools.packages.find]
