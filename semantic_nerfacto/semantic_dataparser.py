@@ -378,8 +378,8 @@ class SemanticNerf(Nerfstudio):
                 for image_filename in image_filenames
             ]
             panoptic_classes = load_from_json(self.config.data / "panoptic_classes.json")
-            thing_classes = panoptic_classes["thing"]
-            stuff_classes = panoptic_classes["stuff"]
+            thing_classes = panoptic_classes["thing_classes"]
+            stuff_classes = panoptic_classes["stuff_classes"]
             thing_colors = torch.tensor(panoptic_classes["thing_colors"], dtype=torch.float32) / 255.0
             stuff_colors = torch.tensor(panoptic_classes["stuff_colors"], dtype=torch.float32) / 255.0
             semantics = Semantics(filenames=filenames, classes=thing_classes+stuff_classes, colors=thing_colors+stuff_colors)
