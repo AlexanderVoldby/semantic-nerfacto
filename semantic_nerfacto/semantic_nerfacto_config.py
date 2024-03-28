@@ -19,7 +19,7 @@ from nerfstudio.engine.trainer import TrainerConfig
 from nerfstudio.plugins.types import MethodSpecification
 
 
-method_template = MethodSpecification(
+semantic_nerfacto = MethodSpecification(
     config=TrainerConfig(
         method_name="semantic-nerfacto",
         steps_per_eval_batch=500,
