@@ -6,11 +6,6 @@ Define your custom method here that registers with Nerfstudio CLI.
 
 from __future__ import annotations
 
-from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModelConfig
-from semantic_nerfacto.semantic_dataparser import SemanticDataParserConfig
-from semantic_nerfacto.semantic_nerfacto_datamanager import SemanticNerfactoDataManagerConfig
-from semantic_nerfacto.semantic_nerfacto_pipeline import SemanticNerfactoPipelineConfig
-
 from nerfstudio.configs.base_config import ViewerConfig
 from nerfstudio.engine.optimizers import AdamOptimizerConfig, RAdamOptimizerConfig
 from nerfstudio.engine.schedulers import (
@@ -20,6 +15,10 @@ from nerfstudio.engine.trainer import TrainerConfig
 from nerfstudio.plugins.types import MethodSpecification
 from nerfstudio.plugins.registry_dataparser import DataParserSpecification
 
+from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModelConfig
+from semantic_nerfacto.semantic_dataparser import SemanticDataParserConfig
+from semantic_nerfacto.semantic_nerfacto_datamanager import SemanticNerfactoDataManagerConfig
+from semantic_nerfacto.semantic_nerfacto_pipeline import SemanticNerfactoPipelineConfig
 
 semantic_dataparser = DataParserSpecification(config=SemanticDataParserConfig())
 
