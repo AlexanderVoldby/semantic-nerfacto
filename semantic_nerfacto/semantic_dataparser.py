@@ -362,19 +362,26 @@ class SemanticNerf(Nerfstudio):
             self.prompted_user = True
 
         downscale_suffix = f"_{self.config.downscale_factor}" if self.config.downscale_factor != 1 else ""
-        images_folder = f"images{downscale_suffix}"
-        segmentations_folder = f"segmentations{downscale_suffix}"
+        # images_folder = f"images{downscale_suffix}"
+        # segmentations_folder = f"segmentations{downscale_suffix}"
+        images_folder = "images"
+        segmentations_folder = "segmentations"
 
         # --- semantics ---
         # TODO: Modify this part to correctly include semantics in the desired format
         if self.config.include_semantics:
-            empty_path = Path()
-            replace_this_path = str(empty_path / images_folder / empty_path)
-            with_this_path = str(empty_path / segmentations_folder / empty_path)
+            # empty_path = Path()
+            # replace_this_path = str(empty_path / images_folder / empty_path)
+            # with_this_path = str(empty_path / segmentations_folder / empty_path)
+            # filenames = [
+                # Path(str(image_filename).replace(replace_this_path, with_this_path).replace(".jpg", ".png"))
+                # for image_filename in image_filenames
+            # ]
             filenames = [
-                Path(str(image_filename).replace(replace_this_path, with_this_path).replace(".jpg", ".png"))
+                Path(str(image_filename).replace(images_folder, segmentations_folder).replace(".jpg", ".png"))
                 for image_filename in image_filenames
             ]
+            print(filenames)
             panoptic_classes = load_from_json(self.config.data / "panoptic_classes.json")
             thing_classes = panoptic_classes["thing_classes"]
             stuff_classes = panoptic_classes["stuff_classes"]

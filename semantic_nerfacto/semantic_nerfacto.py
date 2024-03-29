@@ -186,6 +186,7 @@ class SemanticNerfactoModel(Model):
 
         # losses
         self.rgb_loss = MSELoss()
+        self.cross_entropy_loss = torch.nn.CrossEntropyLoss(reduction="mean")
         self.step = 0
         # metrics
         from torchmetrics.functional import structural_similarity_index_measure
@@ -342,25 +343,24 @@ class SemanticNerfactoModel(Model):
             # Calculate predicted and ground truth segmentations
             # Output size = batch size x num_classes
             # TODO: BAtch does not contain semantics figure out how to add them.
-            print(batch.keys())
-            pred_seg = outputs["semantics"]
-            gt_seg = batch["semantics"].to(self.device)
-            loss_dict["semantic_loss"] = torch.nn.CrossEntropyLoss(gt_seg, pred_seg)
+            # semantic loss
+        loss_dict["semantics_loss"] = self.config.semantic_loss_weight * self.cross_entropy_loss(
+            outputs["semantics"], batch["semantics"][..., 0].long().to(self.device))
             
-            assert metrics_dict is not None and "distortion" in metrics_dict
-            loss_dict["distortion_loss"] = self.config.distortion_loss_mult * metrics_dict["distortion"]
-            if self.config.predict_normals:
-                # orientation loss for computed normals
-                loss_dict["orientation_loss"] = self.config.orientation_loss_mult * torch.mean(
-                    outputs["rendered_orientation_loss"]
-                )
+        assert metrics_dict is not None and "distortion" in metrics_dict
+        loss_dict["distortion_loss"] = self.config.distortion_loss_mult * metrics_dict["distortion"]
+        if self.config.predict_normals:
+            # orientation loss for computed normals
+            loss_dict["orientation_loss"] = self.config.orientation_loss_mult * torch.mean(
+                outputs["rendered_orientation_loss"]
+            )
 
-                # ground truth supervision for normals
-                loss_dict["pred_normal_loss"] = self.config.pred_normal_loss_mult * torch.mean(
-                    outputs["rendered_pred_normal_loss"]
-                )
-            # Add loss from camera optimizer
-            self.camera_optimizer.get_loss_dict(loss_dict)
+            # ground truth supervision for normals
+            loss_dict["pred_normal_loss"] = self.config.pred_normal_loss_mult * torch.mean(
+                outputs["rendered_pred_normal_loss"]
+            )
+        # Add loss from camera optimizer
+        self.camera_optimizer.get_loss_dict(loss_dict)
         return loss_dict
 
     def get_image_metrics_and_images(
