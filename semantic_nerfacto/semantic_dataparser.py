@@ -381,7 +381,6 @@ class SemanticNerf(Nerfstudio):
                 Path(str(image_filename).replace(images_folder, segmentations_folder).replace(".jpg", ".png"))
                 for image_filename in image_filenames
             ]
-            print(filenames)
             panoptic_classes = load_from_json(self.config.data / "panoptic_classes.json")
             thing_classes = panoptic_classes["thing_classes"]
             stuff_classes = panoptic_classes["stuff_classes"]
