@@ -56,6 +56,9 @@ class SemanticNerfactoModelConfig(NerfactoModelConfig):
     _target: Type = field(default_factory=lambda: SemanticNerfactoModel)
     use_transient_embedding: bool = False
     """Whether to use transient embedding."""
+    use_appearance_embedding: bool = True
+    """Whether to use appearance embeddings. Throws error if not included"""
+    average_init_density: float = 1.0
     semantic_loss_weight: float = 1.0
     pass_semantic_gradients: bool = False
 
@@ -96,13 +99,13 @@ class SemanticNerfactoModel(Model):
             use_pred_normals=self.config.predict_normals,
             use_average_appearance_embedding=self.config.use_average_appearance_embedding,
             appearance_embedding_dim=appearance_embedding_dim,
-            average_init_density=self.config.average_init_density,
             implementation=self.config.implementation,
             # Add semantics to field
             use_semantics=True,
-            pass_semantic_gradients=True
+            pass_semantic_gradients=self.config.pass_semantic_gradients,
             # TODO: Find out how to set number of classes, default is 100
-            # num_semantic_classes=100
+            # Hardcoded 134 classes = Detectron default
+            num_semantic_classes=134
         )
 
         self.camera_optimizer: CameraOptimizer = self.config.camera_optimizer.setup(
@@ -119,7 +122,8 @@ class SemanticNerfactoModel(Model):
                 self.scene_box.aabb,
                 spatial_distortion=scene_contraction,
                 **prop_net_args,
-                average_init_density=self.config.average_init_density,
+                # Unused argument must be from older version
+                # average_init_density=self.config.average_init_density,
                 implementation=self.config.implementation,
             )
             self.proposal_networks.append(network)
@@ -131,7 +135,8 @@ class SemanticNerfactoModel(Model):
                     self.scene_box.aabb,
                     spatial_distortion=scene_contraction,
                     **prop_net_args,
-                    average_init_density=self.config.average_init_density,
+                    # Unused argument must be from older version
+                    # average_init_density=self.config.average_init_density,
                     implementation=self.config.implementation,
                 )
                 self.proposal_networks.append(network)
@@ -159,6 +164,11 @@ class SemanticNerfactoModel(Model):
             initial_sampler=initial_sampler,
         )
 
+        # TODO: These are needed to generate a semantics colormap in the outputs, not sure if it's needed
+        # Semantics colormap?
+        # self.semantics = metadata["semantics"]
+        # self.colormap = self.semantics.colors.clone().detach().to(self.device)
+        
         # Collider
         self.collider = NearFarCollider(near_plane=self.config.near_plane, far_plane=self.config.far_plane)
 
@@ -169,7 +179,7 @@ class SemanticNerfactoModel(Model):
         self.renderer_expected_depth = DepthRenderer(method="expected")
         self.renderer_normals = NormalsRenderer()
         # Add semantic renderer
-        self.renderer_seg = SemanticRenderer()
+        self.renderer_semantics = SemanticRenderer()
 
         # shaders
         self.normals_shader = NormalsShader()
@@ -261,18 +271,19 @@ class SemanticNerfactoModel(Model):
             field_outputs[FieldHeadNames.SEMANTICS], weights=semantic_weights)
             
         
-        # semantics colormaps
-        semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
-        semantics_colormap = self.colormap.to(self.device)[semantic_labels]
-        
         outputs = {
             "rgb": rgb,
             "accumulation": accumulation,
             "depth": depth,
             "expected_depth": expected_depth,
-            "semantics": semantics,
-            "semantics_colormap": semantics_colormap
+            "semantics": semantics
         }
+        
+        # TODO: FIgure out if these are needed
+        # semantics colormaps
+        # semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
+        # semantics_colormap = self.colormap.to(self.device)[semantic_labels]
+        # outputs["semantics_colormap"] = semantics_colormap
 
         if self.config.predict_normals:
             normals = self.renderer_normals(normals=field_outputs[FieldHeadNames.NORMALS], weights=weights)
@@ -330,6 +341,8 @@ class SemanticNerfactoModel(Model):
 
             # Calculate predicted and ground truth segmentations
             # Output size = batch size x num_classes
+            # TODO: BAtch does not contain semantics figure out how to add them.
+            print(batch.keys())
             pred_seg = outputs["semantics"]
             gt_seg = batch["semantics"].to(self.device)
             loss_dict["semantic_loss"] = torch.nn.CrossEntropyLoss(gt_seg, pred_seg)

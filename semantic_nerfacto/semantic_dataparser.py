@@ -380,12 +380,8 @@ class SemanticNerf(Nerfstudio):
             stuff_classes = panoptic_classes["stuff_classes"]
             thing_colors = torch.tensor(panoptic_classes["thing_colors"], dtype=torch.float32) / 255.0
             stuff_colors = torch.tensor(panoptic_classes["stuff_colors"], dtype=torch.float32) / 255.0
-            print(f"Lenght of filenames: {len(filenames)}")
-            print(filenames)
-            print(f"Length of classes: {len(thing_classes+stuff_classes)}")
-            colors = thing_colors+stuff_colors
-            print(f"Shape of colors tensor: {colors.shape}")
-            semantics = Semantics(filenames=filenames, classes=thing_classes+stuff_classes, colors=thing_colors+stuff_colors)
+            colors = torch.cat((thing_colors, stuff_colors), 0)
+            semantics = Semantics(filenames=filenames, classes=thing_classes+stuff_classes, colors=colors)
 
 
         dataparser_outputs = DataparserOutputs(
@@ -398,8 +394,9 @@ class SemanticNerf(Nerfstudio):
             metadata={
                 "depth_filenames": depth_filenames if len(depth_filenames) > 0 else None,
                 "depth_unit_scale_factor": self.config.depth_unit_scale_factor,
-                "mask_color": self.config.mask_color,
-                "semantics": semantics
+                # Not sure whether we need to include semantic masks at some point
+                # "mask_color": self.config.mask_color, 
+                "semantics": semantics,
                 **metadata,
             },
         )
