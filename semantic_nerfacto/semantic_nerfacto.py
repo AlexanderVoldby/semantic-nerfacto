@@ -268,10 +268,6 @@ class SemanticNerfactoModel(Model):
         expected_depth = self.renderer_expected_depth(weights=weights, ray_samples=ray_samples)
         accumulation = self.renderer_accumulation(weights=weights)
         
-        # semantics
-        # TODO: Semantic_nerfw uses different weights for semantics and RGB.
-        # In original paper semantics are only calculated based on X, Y, Z position not viewing direction
-        # which makes pretty good sense. 
         semantic_weights = weights
         if not self.config.pass_semantic_gradients:
             semantic_weights = semantic_weights.detach()
@@ -287,7 +283,6 @@ class SemanticNerfactoModel(Model):
             "semantics": semantics
         }
         
-        # TODO: Make these work
         # semantics colormaps
         semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
         semantics_colormap = self.colormap.to(self.device)[semantic_labels]
