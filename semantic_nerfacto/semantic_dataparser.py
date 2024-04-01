@@ -384,22 +384,24 @@ class SemanticNerf(Nerfstudio):
             panoptic_classes = load_from_json(self.config.data / "panoptic_classes.json")
             thing_classes = panoptic_classes["thing_classes"]
             stuff_classes = panoptic_classes["stuff_classes"]
-            classes = thing_classes+stuff_classes
+            classes = thing_classes + stuff_classes
             thing_colors = torch.tensor(panoptic_classes["thing_colors"], dtype=torch.float32) / 255.0
             stuff_colors = torch.tensor(panoptic_classes["stuff_colors"], dtype=torch.float32) / 255.0
             colors = torch.cat((thing_colors, stuff_colors), 0)
             
             # Define classes that we expect to see in the dataset
-            expected_classes = {"chair", "couch", "bed", "dining table", "toilet",
+            expected_classes = ["chair", "couch", "bed", "dining table", "toilet",
                                 "tv", "refrigerator", "clock", "vase", "blanket",
                                 "curtain", "door-stuff", "floor-wood", "mirror-stuff",
                                 "pillow", "shelf", "stairs", "wall-brick", "table",
-                                "window", "ceiling", "floor", "wall", "rug"}
+                                "window", "ceiling", "floor", "wall", "rug"]
             
             # List of classes that we exclude from training. These are masked out from training for all modalitites
+            # TODO: Passing class masks with no nonzero indices (non-existing classes) throws an error
             mask_classes = [c for c in classes if c not in expected_classes]
             
-            semantics = Semantics(filenames=filenames, classes=classes, colors=colors, mask_classes=mask_classes)
+            # TODO: Figure out how to use mask_classes and apply it
+            semantics = Semantics(filenames=filenames, classes=classes, colors=colors)
 
 
         dataparser_outputs = DataparserOutputs(

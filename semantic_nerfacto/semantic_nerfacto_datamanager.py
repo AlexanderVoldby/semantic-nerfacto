@@ -9,7 +9,8 @@ import torch
 
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManager, VanillaDataManagerConfig
-from nerfstudio.data.datasets.semantic_dataset import SemanticDataset
+
+from semantic_nerfacto.semantic_depth_dataset import SemanticDepthDataset
 
 
 @dataclass
@@ -56,15 +57,15 @@ class SemanticNerfactoDataManager(VanillaDataManager):
         ray_bundle = self.train_ray_generator(ray_indices)
         return ray_bundle, batch
     
-    def create_train_dataset(self) -> SemanticDataset:
+    def create_train_dataset(self) -> SemanticDepthDataset:
         self.train_dataparser_outputs = self.dataparser.get_dataparser_outputs(split="train")
-        return SemanticDataset(
+        return SemanticDepthDataset(
             dataparser_outputs=self.train_dataparser_outputs,
             scale_factor=self.config.camera_res_scale_factor,
         )
 
-    def create_eval_dataset(self) -> SemanticDataset:
-        return SemanticDataset(
+    def create_eval_dataset(self) -> SemanticDepthDataset:
+        return SemanticDepthDataset(
             dataparser_outputs=self.dataparser.get_dataparser_outputs(split=self.test_split),
             scale_factor=self.config.camera_res_scale_factor,
         )
