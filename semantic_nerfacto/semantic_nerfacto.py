@@ -40,6 +40,7 @@ from nerfstudio.model_components.losses import (
     pred_normal_loss,
     scale_gradients_by_distance_squared,
 )
+from nerfstudio.data.dataparsers.base_dataparser import Semantics
 from nerfstudio.model_components.ray_samplers import ProposalNetworkSampler, UniformSampler
 from nerfstudio.model_components.renderers import AccumulationRenderer, DepthRenderer, NormalsRenderer, RGBRenderer, SemanticRenderer
 from nerfstudio.model_components.scene_colliders import NearFarCollider
@@ -72,6 +73,12 @@ class SemanticNerfactoModel(Model):
 
     config: SemanticNerfactoModelConfig
 
+    def __init__(self, config: SemanticNerfactoModelConfig, metadata: Dict, **kwargs) -> None:
+        assert "semantics" in metadata.keys() and isinstance(metadata["semantics"], Semantics)
+        self.semantics = metadata["semantics"]
+        super().__init__(config=config, **kwargs)
+        self.colormap = self.semantics.colors.clone().detach().to(self.device)
+    
     def populate_modules(self):
         """Set the fields and modules."""
         super().populate_modules()
@@ -280,11 +287,11 @@ class SemanticNerfactoModel(Model):
             "semantics": semantics
         }
         
-        # TODO: FIgure out if these are needed
+        # TODO: Make these work
         # semantics colormaps
-        # semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
-        # semantics_colormap = self.colormap.to(self.device)[semantic_labels]
-        # outputs["semantics_colormap"] = semantics_colormap
+        semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
+        semantics_colormap = self.colormap.to(self.device)[semantic_labels]
+        outputs["semantics_colormap"] = semantics_colormap
 
         if self.config.predict_normals:
             normals = self.renderer_normals(normals=field_outputs[FieldHeadNames.NORMALS], weights=weights)
