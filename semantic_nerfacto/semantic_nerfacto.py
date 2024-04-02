@@ -403,4 +403,12 @@ class SemanticNerfactoModel(Model):
             )
             images_dict[key] = prop_depth_i
 
+        # semantics
+        semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
+        images_dict["semantics_colormap"] = self.colormap.to(self.device)[semantic_labels]
+
+        # valid mask
+        # TODO: Include these if using masks
+        # images_dict["mask"] = batch["mask"].repeat(1, 1, 3).to(self.device)
+        
         return metrics_dict, images_dict

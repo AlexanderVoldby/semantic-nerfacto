@@ -37,7 +37,7 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
 
     def get_outputs(self, ray_bundle: RayBundle):
         outputs = super().get_outputs(ray_bundle)  # Get semantic outputs
-        
+        assert "semantics" in outputs and "semantics_colormap" in outputs, "No semantics in superclass output!"
         # If depth supervision is applicable, add depth-related outputs
         if ray_bundle.metadata is not None and "directions_norm" in ray_bundle.metadata:
             outputs["directions_norm"] = ray_bundle.metadata["directions_norm"]
@@ -74,7 +74,7 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
 
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = super().get_loss_dict(outputs, batch, metrics_dict)  # Get semantic losses
-        
+        assert "semantics_loss" in loss_dict, "No semantic loss in loss_dict!"
         # Add depth-related losses if depth images are in the batch
         if self.training and "depth_image" in batch:
             assert metrics_dict is not None and ("depth_loss" in metrics_dict or "depth_ranking" in metrics_dict)
@@ -93,6 +93,7 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
     ) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
         """Appends ground truth depth to the depth image."""
         metrics, images = super().get_image_metrics_and_images(outputs, batch)
+        assert "semantics_colormap" in images, "No semantics_colormap in images dict!"
         ground_truth_depth = batch["depth_image"].to(self.device)
         if not self.config.is_euclidean_depth:
             ground_truth_depth = ground_truth_depth * outputs["directions_norm"]
