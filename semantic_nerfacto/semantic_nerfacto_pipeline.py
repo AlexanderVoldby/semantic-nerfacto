@@ -1,7 +1,7 @@
 """
 Nerfstudio Template Pipeline. Basically unedited as we don't need a sspecial pipeline
 """
-
+import torch
 import typing
 from dataclasses import dataclass, field
 from typing import Literal, Optional, Type
@@ -75,3 +75,6 @@ class SemanticNerfactoPipeline(VanillaPipeline):
                 SemanticNerfactoModel, DDP(self._model, device_ids=[local_rank], find_unused_parameters=True)
             )
             dist.barrier(device_ids=[local_rank])
+    
+    # TODO: Add total variation loss as included in Nerfbusters
+    # Requires getting the loss_dict from the model and adding the TV-loss
