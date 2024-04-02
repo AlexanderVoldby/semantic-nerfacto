@@ -1,6 +1,6 @@
 "Model that includes semantic support as well as depth supervision"
-from dataclasses import dataclass
-from typing import Dict, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, List, Literal, Tuple, Type
 
 import numpy as np
 import torch
@@ -16,6 +16,7 @@ from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel
 @dataclass
 class SemanticDepthNerfactoModelConfig(NerfactoModelConfig):
     # Combine configurations of both models
+    _target: Type = field(default_factory=lambda: SemanticDepthNerfactoModel)
     depth_loss_mult: float = 1e-3
     is_euclidean_depth: bool = False
     depth_sigma: float = 0.01
@@ -35,6 +36,8 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
             self.depth_sigma = torch.tensor([self.config.starting_depth_sigma])
         else:
             self.depth_sigma = torch.tensor([self.config.depth_sigma])
+            
+        print("Initialised Semantic Depth Nerfacto!")
 
     def get_outputs(self, ray_bundle: RayBundle):
         outputs = super().get_outputs(ray_bundle)  # Get semantic outputs
