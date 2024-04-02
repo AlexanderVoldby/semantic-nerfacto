@@ -77,12 +77,39 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
         
         # Add depth-related losses if depth images are in the batch
         if self.training and "depth_image" in batch:
+            assert metrics_dict is not None and ("depth_loss" in metrics_dict or "depth_ranking" in metrics_dict)
             if "depth_loss" in metrics_dict:
                 loss_dict["depth_loss"] = self.config.depth_loss_mult * metrics_dict["depth_loss"]
             if "depth_ranking" in metrics_dict:
-                loss_dict["depth_ranking"] = self.config.depth_loss_mult * metrics_dict["depth_ranking"]
-
+                loss_dict["depth_ranking"] = (
+                    self.config.depth_loss_mult
+                    * metrics_dict["depth_ranking"]
+                    * np.interp(self.step, [0, 2000], [0, 0.2])
+                )
         return loss_dict
+    
+    def get_image_metrics_and_images(
+        self, outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor]
+    ) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
+        """Appends ground truth depth to the depth image."""
+        metrics, images = super().get_image_metrics_and_images(outputs, batch)
+        ground_truth_depth = batch["depth_image"].to(self.device)
+        if not self.config.is_euclidean_depth:
+            ground_truth_depth = ground_truth_depth * outputs["directions_norm"]
+
+        ground_truth_depth_colormap = colormaps.apply_depth_colormap(ground_truth_depth)
+        predicted_depth_colormap = colormaps.apply_depth_colormap(
+            outputs["depth"],
+            accumulation=outputs["accumulation"],
+            near_plane=float(torch.min(ground_truth_depth).cpu()),
+            far_plane=float(torch.max(ground_truth_depth).cpu()),
+        )
+        images["depth"] = torch.cat([ground_truth_depth_colormap, predicted_depth_colormap], dim=1)
+        depth_mask = ground_truth_depth > 0
+        metrics["depth_mse"] = float(
+            torch.nn.functional.mse_loss(outputs["depth"][depth_mask], ground_truth_depth[depth_mask]).cpu()
+        )
+        return metrics, images
 
     def _get_sigma(self):
         if not self.config.should_decay_sigma:
