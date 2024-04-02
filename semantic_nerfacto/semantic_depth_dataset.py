@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from PIL import Image
 from pathlib import Path
+from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 from rich.progress import track
 
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs, Semantics
@@ -29,8 +30,9 @@ class SemanticDepthDataset(InputDataset):
         # TODO if depth images already exist from LiDAR, extend them with pretrained model
         self.depth_filenames = self.metadata.get("depth_filenames")
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
-        if not self.depth_filenames:
-            self._generate_depth_images(dataparser_outputs)
+        # if not self.depth_filenames:
+        # Currently always generate depth as LiDAR depth is sparse
+        self._generate_depth_images(dataparser_outputs)
 
     def _generate_depth_images(self, dataparser_outputs: DataparserOutputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -42,21 +44,21 @@ class SemanticDepthDataset(InputDataset):
             CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
             losses.FORCE_PSEUDODEPTH_LOSS = True
             depth_tensors = []
-            repo = "isl-org/ZoeDepth"
-            self.zoe = torch_compile(torch.hub.load(repo, "ZoeD_NK", pretrained=True).to(device))
+            repo = "LiheYoung/depth-anything-small-hf"
+            image_processor = AutoImageProcessor.from_pretrained(repo)
+            model = AutoModelForDepthEstimation.from_pretrained(repo)
             for image_filename in track(dataparser_outputs.image_filenames, description="Generating depth images"):
                 pil_image = Image.open(image_filename)
-                image = np.array(pil_image, dtype="float32") / 255.0
-                image = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).to(device)
+                inputs = image_processor(images=pil_image, return_tensors="pt")
                 with torch.no_grad():
-                    depth_tensor = self.zoe.infer(image).squeeze().unsqueeze(-1)
-                depth_tensors.append(depth_tensor)
+                    outputs = model(**inputs)
+                    predicted_depth = outputs.predicted_depth
+                depth_tensors.append(predicted_depth)
             self.depths = torch.stack(depth_tensors)
             np.save(cache, self.depths.cpu().numpy())
             self.depth_filenames = None
 
     def get_metadata(self, data: Dict) -> Dict:
-        metadata = super().get_metadata(data)
         
         # handle mask
         filepath = self.semantics.filenames[data["image_idx"]]
