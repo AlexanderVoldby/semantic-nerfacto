@@ -44,7 +44,7 @@ class SemanticDepthDataset(InputDataset):
             CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
             losses.FORCE_PSEUDODEPTH_LOSS = True
             depth_tensors = []
-            repo = "LiheYoung/depth-anything-small-hf"
+            repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
             for image_filename in track(dataparser_outputs.image_filenames, description="Generating depth images"):
