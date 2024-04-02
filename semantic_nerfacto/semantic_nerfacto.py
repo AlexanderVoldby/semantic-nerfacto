@@ -171,8 +171,8 @@ class SemanticNerfactoModel(Model):
             initial_sampler=initial_sampler,
         )
 
-        # TODO: These are needed to generate a semantics colormap in the outputs, not sure if it's needed
-        # Semantics colormap?
+        # TODO: Current colormap generation works fine without this
+        # Figure out if needed or if I can discard
         # self.semantics = metadata["semantics"]
         # self.colormap = self.semantics.colors.clone().detach().to(self.device)
         
