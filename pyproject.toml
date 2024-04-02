@@ -11,6 +11,7 @@ include = ["semantic_nerfacto*"]
 
 [project.entry-points.'nerfstudio.method_configs']
 semantic_nerfacto = 'semantic_nerfacto.semantic_nerfacto_config:semantic_nerfacto'
+semantic_depth_nerfacto = 'semantic_nerfacto.semantic_nerfacto_config:semantic_depth_nerfacto'
 
 # Custom dataparser causes circular import
 # [project.entry-points.'nerfstudio.dataparser_configs']

@@ -26,6 +26,7 @@ class SemanticDepthDataset(InputDataset):
         ).view(1, 1, -1)
 
         # Depth image handling
+        # TODO if depth images already exist from LiDAR, extend them with pretrained model
         self.depth_filenames = self.metadata.get("depth_filenames")
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
         if not self.depth_filenames:
