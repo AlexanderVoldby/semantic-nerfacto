@@ -9,6 +9,7 @@ from nerfstudio.model_components.losses import DepthLossType, depth_loss, depth_
 from nerfstudio.models.nerfacto import NerfactoModelConfig
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.utils import colormaps
+from nerfstudio.model_components.renderers import SemanticRenderer
 
 from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel
 

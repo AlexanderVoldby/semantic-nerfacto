@@ -46,7 +46,7 @@ from nerfstudio.model_components.renderers import AccumulationRenderer, DepthRen
 from nerfstudio.model_components.scene_colliders import NearFarCollider
 from nerfstudio.model_components.shaders import NormalsShader
 from nerfstudio.models.base_model import Model
-from nerfstudio.models.nerfacto import NerfactoModelConfig
+from nerfstudio.models.nerfacto import NerfactoModel, NerfactoModelConfig
 from nerfstudio.utils import colormaps
 
 
@@ -64,7 +64,7 @@ class SemanticNerfactoModelConfig(NerfactoModelConfig):
     pass_semantic_gradients: bool = False
 
 
-class SemanticNerfactoModel(Model):
+class SemanticNerfactoModel(NerfactoModel):
     """Nerfacto model
 
     Args:
@@ -115,95 +115,14 @@ class SemanticNerfactoModel(Model):
             num_semantic_classes=134
         )
 
-        self.camera_optimizer: CameraOptimizer = self.config.camera_optimizer.setup(
-            num_cameras=self.num_train_data, device="cpu"
-        )
-        self.density_fns = []
-        num_prop_nets = self.config.num_proposal_iterations
-        # Build the proposal network(s)
-        self.proposal_networks = torch.nn.ModuleList()
-        if self.config.use_same_proposal_network:
-            assert len(self.config.proposal_net_args_list) == 1, "Only one proposal network is allowed."
-            prop_net_args = self.config.proposal_net_args_list[0]
-            network = HashMLPDensityField(
-                self.scene_box.aabb,
-                spatial_distortion=scene_contraction,
-                **prop_net_args,
-                # Unused argument must be from older version
-                # average_init_density=self.config.average_init_density,
-                implementation=self.config.implementation,
-            )
-            self.proposal_networks.append(network)
-            self.density_fns.extend([network.density_fn for _ in range(num_prop_nets)])
-        else:
-            for i in range(num_prop_nets):
-                prop_net_args = self.config.proposal_net_args_list[min(i, len(self.config.proposal_net_args_list) - 1)]
-                network = HashMLPDensityField(
-                    self.scene_box.aabb,
-                    spatial_distortion=scene_contraction,
-                    **prop_net_args,
-                    # Unused argument must be from older version
-                    # average_init_density=self.config.average_init_density,
-                    implementation=self.config.implementation,
-                )
-                self.proposal_networks.append(network)
-            self.density_fns.extend([network.density_fn for network in self.proposal_networks])
-
-        # Samplers
-        def update_schedule(step):
-            return np.clip(
-                np.interp(step, [0, self.config.proposal_warmup], [0, self.config.proposal_update_every]),
-                1,
-                self.config.proposal_update_every,
-            )
-
-        # Change proposal network initial sampler if uniform
-        initial_sampler = None  # None is for piecewise as default (see ProposalNetworkSampler)
-        if self.config.proposal_initial_sampler == "uniform":
-            initial_sampler = UniformSampler(single_jitter=self.config.use_single_jitter)
-
-        self.proposal_sampler = ProposalNetworkSampler(
-            num_nerf_samples_per_ray=self.config.num_nerf_samples_per_ray,
-            num_proposal_samples_per_ray=self.config.num_proposal_samples_per_ray,
-            num_proposal_network_iterations=self.config.num_proposal_iterations,
-            single_jitter=self.config.use_single_jitter,
-            update_sched=update_schedule,
-            initial_sampler=initial_sampler,
-        )
-
         # TODO: Current colormap generation works fine without this
         # Figure out if needed or if I can discard
         # self.semantics = metadata["semantics"]
         # self.colormap = self.semantics.colors.clone().detach().to(self.device)
-        
-        # Collider
-        self.collider = NearFarCollider(near_plane=self.config.near_plane, far_plane=self.config.far_plane)
 
-        # renderers
-        self.renderer_rgb = RGBRenderer(background_color=self.config.background_color)
-        self.renderer_accumulation = AccumulationRenderer()
-        self.renderer_depth = DepthRenderer(method="median")
-        self.renderer_expected_depth = DepthRenderer(method="expected")
-        self.renderer_normals = NormalsRenderer()
         # Add semantic renderer
         self.renderer_semantics = SemanticRenderer()
-
-        # shaders
-        self.normals_shader = NormalsShader()
-
-        # losses
-        self.rgb_loss = MSELoss()
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss(reduction="mean")
-        self.step = 0
-        # metrics
-        from torchmetrics.functional import structural_similarity_index_measure
-        from torchmetrics.image import PeakSignalNoiseRatio
-        from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
-
-        self.psnr = PeakSignalNoiseRatio(data_range=1.0)
-        self.ssim = structural_similarity_index_measure
-        self.lpips = LearnedPerceptualImagePatchSimilarity(normalize=True)
-        self.step = 0
 
     def get_param_groups(self) -> Dict[str, List[Parameter]]:
         param_groups = {}
@@ -342,9 +261,6 @@ class SemanticNerfactoModel(Model):
                 outputs["weights_list"], outputs["ray_samples_list"]
             )
 
-            # Calculate predicted and ground truth segmentations
-            # Output size = batch size x num_classes
-            # TODO: BAtch does not contain semantics figure out how to add them.
             # semantic loss
         loss_dict["semantics_loss"] = self.config.semantic_loss_weight * self.cross_entropy_loss(
             outputs["semantics"], batch["semantics"][..., 0].long().to(self.device))
