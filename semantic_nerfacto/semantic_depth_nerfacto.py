@@ -24,6 +24,9 @@ class SemanticDepthNerfactoModelConfig(NerfactoModelConfig):
     starting_depth_sigma: float = 0.2
     sigma_decay_rate: float = 0.99985
     depth_loss_type: DepthLossType = DepthLossType.DS_NERF
+    use_appearance_embedding: bool = True
+    """Whether to use appearance embeddings. Throws error if not included"""
+    average_init_density: float = 1.0
     semantic_loss_weight: float = 1.0
     pass_semantic_gradients: bool = False
 
@@ -36,8 +39,7 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
             self.depth_sigma = torch.tensor([self.config.starting_depth_sigma])
         else:
             self.depth_sigma = torch.tensor([self.config.depth_sigma])
-            
-        print("Initialised Semantic Depth Nerfacto!")
+
 
     def get_outputs(self, ray_bundle: RayBundle):
         outputs = super().get_outputs(ray_bundle)  # Get semantic outputs
@@ -46,7 +48,6 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
         if ray_bundle.metadata is not None and "directions_norm" in ray_bundle.metadata:
             outputs["directions_norm"] = ray_bundle.metadata["directions_norm"]
 
-        print(f"Output keys: {outputs.keys()}")
         return outputs
 
     def get_metrics_dict(self, outputs, batch):
