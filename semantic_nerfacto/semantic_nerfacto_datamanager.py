@@ -51,7 +51,6 @@ class SemanticNerfactoDataManager(VanillaDataManager):
         image_batch = next(self.iter_train_image_dataloader)
         assert self.train_pixel_sampler is not None
         assert isinstance(image_batch, dict)
-        print(image_batch)
         batch = self.train_pixel_sampler.sample(image_batch)
         ray_indices = batch["indices"]
         ray_bundle = self.train_ray_generator(ray_indices)
