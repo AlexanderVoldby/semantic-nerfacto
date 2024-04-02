@@ -57,6 +57,16 @@ class SemanticDepthDataset(InputDataset):
 
     def get_metadata(self, data: Dict) -> Dict:
         metadata = super().get_metadata(data)
+        
+        # handle mask
+        filepath = self.semantics.filenames[data["image_idx"]]
+        semantic_label, mask = get_semantics_and_mask_tensors_from_path(
+            filepath=filepath, mask_indices=self.mask_indices, scale_factor=self.scale_factor
+        )
+        if "mask" in data.keys():
+            mask = mask & data["mask"]
+        
+        # Handle depth stuff
         image_idx = data["image_idx"]
         if self.depth_filenames is None:
             metadata["depth_image"] = self.depths[image_idx]
@@ -65,7 +75,15 @@ class SemanticDepthDataset(InputDataset):
             height = int(self._dataparser_outputs.cameras.height[image_idx])
             width = int(self._dataparser_outputs.cameras.width[image_idx])
             scale_factor = self.depth_unit_scale_factor * self.scale_factor
-            metadata["depth_image"] = get_depth_image_from_path(
+            depth_image = get_depth_image_from_path(
                 filepath=filepath, height=height, width=width, scale_factor=scale_factor
             )
-        return metadata
+        return {"mask": mask, "semantics": semantic_label, "depth_image": depth_image}
+    
+    def _find_transform(self, image_path: Path) -> Union[Path, None]:
+        while image_path.parent != image_path:
+            transform_path = image_path.parent / "transforms.json"
+            if transform_path.exists():
+                return transform_path
+            image_path = image_path.parent
+        return None

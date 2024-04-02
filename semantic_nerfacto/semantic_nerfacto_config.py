@@ -96,5 +96,5 @@ semantic_depth_nerfacto = MethodSpecification(
         viewer=ViewerConfig(num_rays_per_chunk=1 << 15),
         vis="viewer",
     ),
-    description="Implementation of semantic Nerf that adds semantic segmentation to the Nerfacto model.",
+    description="Implementation of semantic Nerf that adds semantic segmentation to the Nerfacto model and also includes depth supervision.",
 )
