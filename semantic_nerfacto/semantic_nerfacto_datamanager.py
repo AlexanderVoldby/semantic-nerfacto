@@ -23,7 +23,6 @@ class SemanticNerfactoDataManagerConfig(VanillaDataManagerConfig):
     _target: Type = field(default_factory=lambda: SemanticNerfactoDataManager)
 
 
-# TODO: modify the datamanager to use semantic dataset instead of IputDataset
 class SemanticNerfactoDataManager(VanillaDataManager):
     """Template DataManager
 

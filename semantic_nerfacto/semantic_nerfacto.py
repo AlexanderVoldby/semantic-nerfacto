@@ -131,44 +131,9 @@ class SemanticNerfactoModel(NerfactoModel):
         self.camera_optimizer.get_param_groups(param_groups=param_groups)
         return param_groups
 
-    def get_training_callbacks(
-        self, training_callback_attributes: TrainingCallbackAttributes
-    ) -> List[TrainingCallback]:
-        callbacks = []
-        if self.config.use_proposal_weight_anneal:
-            # anneal the weights of the proposal network before doing PDF sampling
-            N = self.config.proposal_weights_anneal_max_num_iters
-
-            def set_anneal(step):
-                # https://arxiv.org/pdf/2111.12077.pdf eq. 18
-                self.step = step
-                train_frac = np.clip(step / N, 0, 1)
-                self.step = step
-
-                def bias(x, b):
-                    return b * x / ((b - 1) * x + 1)
-
-                anneal = bias(train_frac, self.config.proposal_weights_anneal_slope)
-                self.proposal_sampler.set_anneal(anneal)
-
-            callbacks.append(
-                TrainingCallback(
-                    where_to_run=[TrainingCallbackLocation.BEFORE_TRAIN_ITERATION],
-                    update_every_num_iters=1,
-                    func=set_anneal,
-                )
-            )
-            callbacks.append(
-                TrainingCallback(
-                    where_to_run=[TrainingCallbackLocation.AFTER_TRAIN_ITERATION],
-                    update_every_num_iters=1,
-                    func=self.proposal_sampler.step_cb,
-                )
-            )
-        return callbacks
-
     def get_outputs(self, ray_bundle: RayBundle):
-        # apply the camera optimizer pose tweaks
+        outputs = super().get_outputs(ray_bundle)  # Get nerfacto outputs
+        
         if self.training:
             self.camera_optimizer.apply_to_raybundle(ray_bundle)
         ray_samples: RaySamples
@@ -180,56 +145,21 @@ class SemanticNerfactoModel(NerfactoModel):
         weights = ray_samples.get_weights(field_outputs[FieldHeadNames.DENSITY])
         weights_list.append(weights)
         ray_samples_list.append(ray_samples)
-
-        rgb = self.renderer_rgb(rgb=field_outputs[FieldHeadNames.RGB], weights=weights)
-        with torch.no_grad():
-            depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
-        expected_depth = self.renderer_expected_depth(weights=weights, ray_samples=ray_samples)
-        accumulation = self.renderer_accumulation(weights=weights)
         
+        # Add semantics to output
         semantic_weights = weights
         if not self.config.pass_semantic_gradients:
             semantic_weights = semantic_weights.detach()
         semantics = self.renderer_semantics(
             field_outputs[FieldHeadNames.SEMANTICS], weights=semantic_weights)
             
-        
-        outputs = {
-            "rgb": rgb,
-            "accumulation": accumulation,
-            "depth": depth,
-            "expected_depth": expected_depth,
-            "semantics": semantics
-        }
+        outputs["semantics"] = semantics
         
         # semantics colormaps
         semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
         semantics_colormap = self.colormap.to(self.device)[semantic_labels]
         outputs["semantics_colormap"] = semantics_colormap
 
-        if self.config.predict_normals:
-            normals = self.renderer_normals(normals=field_outputs[FieldHeadNames.NORMALS], weights=weights)
-            pred_normals = self.renderer_normals(field_outputs[FieldHeadNames.PRED_NORMALS], weights=weights)
-            outputs["normals"] = self.normals_shader(normals)
-            outputs["pred_normals"] = self.normals_shader(pred_normals)
-        # These use a lot of GPU memory, so we avoid storing them for eval.
-        if self.training:
-            outputs["weights_list"] = weights_list
-            outputs["ray_samples_list"] = ray_samples_list
-
-        if self.training and self.config.predict_normals:
-            outputs["rendered_orientation_loss"] = orientation_loss(
-                weights.detach(), field_outputs[FieldHeadNames.NORMALS], ray_bundle.directions
-            )
-
-            outputs["rendered_pred_normal_loss"] = pred_normal_loss(
-                weights.detach(),
-                field_outputs[FieldHeadNames.NORMALS].detach(),
-                field_outputs[FieldHeadNames.PRED_NORMALS],
-            )
-
-        for i in range(self.config.num_proposal_iterations):
-            outputs[f"prop_depth_{i}"] = self.renderer_depth(weights=weights_list[i], ray_samples=ray_samples_list[i])
         return outputs
 
     def get_metrics_dict(self, outputs, batch):
@@ -246,37 +176,13 @@ class SemanticNerfactoModel(NerfactoModel):
         return metrics_dict
 
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
-        loss_dict = {}
-        image = batch["image"].to(self.device)
-        pred_rgb, gt_rgb = self.renderer_rgb.blend_background_for_loss_computation(
-            pred_image=outputs["rgb"],
-            pred_accumulation=outputs["accumulation"],
-            gt_image=image,
-        )
         
-
-        loss_dict["rgb_loss"] = self.rgb_loss(gt_rgb, pred_rgb)
-        if self.training:
-            loss_dict["interlevel_loss"] = self.config.interlevel_loss_mult * interlevel_loss(
-                outputs["weights_list"], outputs["ray_samples_list"]
-            )
-
-            # semantic loss
+        loss_dict = super().get_loss_dict(outputs, batch, metrics_dict)
+        
+        # semantic loss
         loss_dict["semantics_loss"] = self.config.semantic_loss_weight * self.cross_entropy_loss(
             outputs["semantics"], batch["semantics"][..., 0].long().to(self.device))
-            
-        assert metrics_dict is not None and "distortion" in metrics_dict
-        loss_dict["distortion_loss"] = self.config.distortion_loss_mult * metrics_dict["distortion"]
-        if self.config.predict_normals:
-            # orientation loss for computed normals
-            loss_dict["orientation_loss"] = self.config.orientation_loss_mult * torch.mean(
-                outputs["rendered_orientation_loss"]
-            )
 
-            # ground truth supervision for normals
-            loss_dict["pred_normal_loss"] = self.config.pred_normal_loss_mult * torch.mean(
-                outputs["rendered_pred_normal_loss"]
-            )
         # Add loss from camera optimizer
         self.camera_optimizer.get_loss_dict(loss_dict)
         return loss_dict
@@ -284,41 +190,9 @@ class SemanticNerfactoModel(NerfactoModel):
     def get_image_metrics_and_images(
         self, outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor]
     ) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
-        gt_rgb = batch["image"].to(self.device)
-        predicted_rgb = outputs["rgb"]  # Blended with background (black if random background)
-        gt_rgb = self.renderer_rgb.blend_background(gt_rgb)
-        acc = colormaps.apply_colormap(outputs["accumulation"])
-        depth = colormaps.apply_depth_colormap(
-            outputs["depth"],
-            accumulation=outputs["accumulation"],
-        )
-
-        combined_rgb = torch.cat([gt_rgb, predicted_rgb], dim=1)
-        combined_acc = torch.cat([acc], dim=1)
-        combined_depth = torch.cat([depth], dim=1)
-
-        # Switch images from [H, W, C] to [1, C, H, W] for metrics computations
-        gt_rgb = torch.moveaxis(gt_rgb, -1, 0)[None, ...]
-        predicted_rgb = torch.moveaxis(predicted_rgb, -1, 0)[None, ...]
-
-        psnr = self.psnr(gt_rgb, predicted_rgb)
-        ssim = self.ssim(gt_rgb, predicted_rgb)
-        lpips = self.lpips(gt_rgb, predicted_rgb)
-
-        # all of these metrics will be logged as scalars
-        metrics_dict = {"psnr": float(psnr.item()), "ssim": float(ssim)}  # type: ignore
-        metrics_dict["lpips"] = float(lpips)
-
-        images_dict = {"img": combined_rgb, "accumulation": combined_acc, "depth": combined_depth}
-
-        for i in range(self.config.num_proposal_iterations):
-            key = f"prop_depth_{i}"
-            prop_depth_i = colormaps.apply_depth_colormap(
-                outputs[key],
-                accumulation=outputs["accumulation"],
-            )
-            images_dict[key] = prop_depth_i
-
+        
+        metrics_dict, images_dict = super().get_image_metrics_and_images(outputs, batch)
+        
         # semantics
         semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
         images_dict["semantics_colormap"] = self.colormap.to(self.device)[semantic_labels]
