@@ -43,6 +43,7 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
         if ray_bundle.metadata is not None and "directions_norm" in ray_bundle.metadata:
             outputs["directions_norm"] = ray_bundle.metadata["directions_norm"]
 
+        print(f"Output keys: {outputs.keys()}")
         return outputs
 
     def get_metrics_dict(self, outputs, batch):
@@ -92,9 +93,11 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
     def get_image_metrics_and_images(
         self, outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor]
     ) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
-        """Appends ground truth depth to the depth image."""
+        
         metrics, images = super().get_image_metrics_and_images(outputs, batch)
         assert "semantics_colormap" in images, "No semantics_colormap in images dict!"
+        
+        """Appends ground truth depth to the depth image."""
         ground_truth_depth = batch["depth_image"].to(self.device)
         if not self.config.is_euclidean_depth:
             ground_truth_depth = ground_truth_depth * outputs["directions_norm"]
