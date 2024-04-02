@@ -69,11 +69,11 @@ class SemanticDepthDataset(InputDataset):
         # Handle depth stuff
         image_idx = data["image_idx"]
         if self.depth_filenames is None:
-            metadata["depth_image"] = self.depths[image_idx]
+            depth_image = self.depths[data[image_idx]]
         else:
-            filepath = self.depth_filenames[image_idx]
-            height = int(self._dataparser_outputs.cameras.height[image_idx])
-            width = int(self._dataparser_outputs.cameras.width[image_idx])
+            filepath = self.depth_filenames[data[image_idx]]
+            height = int(self._dataparser_outputs.cameras.height[data[image_idx]])
+            width = int(self._dataparser_outputs.cameras.width[data[image_idx]])
             scale_factor = self.depth_unit_scale_factor * self.scale_factor
             depth_image = get_depth_image_from_path(
                 filepath=filepath, height=height, width=width, scale_factor=scale_factor
