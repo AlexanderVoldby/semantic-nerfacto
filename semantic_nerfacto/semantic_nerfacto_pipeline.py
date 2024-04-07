@@ -1,5 +1,6 @@
 """
-Nerfstudio Template Pipeline. Basically unedited as we don't need a sspecial pipeline
+Pipeline for the custom model. It is in the pipeline that the sparse regularization
+from regNeRF / nerfbusters is implemented
 """
 import torch
 import typing
@@ -12,6 +13,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from semantic_nerfacto.semantic_nerfacto_datamanager import SemanticNerfactoDataManagerConfig
 from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel, SemanticNerfactoModelConfig
+from utils.random_train_pose import random_train_pose
+
 from nerfstudio.data.datamanagers.base_datamanager import (
     DataManager,
     DataManagerConfig,
@@ -78,3 +81,46 @@ class SemanticNerfactoPipeline(VanillaPipeline):
     
     # TODO: Add total variation loss as included in Nerfbusters
     # Requires getting the loss_dict from the model and adding the TV-loss
+    @profiler.time_function
+    def get_train_loss_dict(self, step: int):
+        model_outputs, loss_dict, metrics_dict = self.get_standard_loss_dict(step)
+
+        # --------------------- 2D losses ---------------------
+        activate_patch_sampling = self.config.use_regnerf_loss
+
+        # TODO: debug why patch sampling decreases model performance
+        if activate_patch_sampling:
+            cameras, vertical_rotation, central_rotation = random_train_pose(
+                size=self.config.num_patches,
+                resolution=self.config.patch_resolution,
+                device=self.device,
+                radius_mean=self.config.aabb_scalar,  # no sqrt(3) here
+                radius_std=0.0,
+                central_rotation_range=self.config.central_rotation_range,
+                vertical_rotation_range=self.config.vertical_rotation_range,
+                focal_range=self.config.focal_range,
+                jitter_std=self.config.jitter_std,
+                center=self.config.center,
+            )
+            # TODO(ethan): fix indices
+            camera_indices = torch.tensor(list(range(self.config.num_patches))).unsqueeze(-1)
+            ray_bundle_patches = cameras.generate_rays(
+                camera_indices
+            )  # (patch_resolution, patch_resolution, num_patches)
+            ray_bundle_patches = ray_bundle_patches.flatten()
+            # TODO: deal with appearance embeddings
+            model_outputs_patches = self.model(ray_bundle_patches)
+            rgb_patches = (
+                model_outputs_patches["rgb"]
+                .reshape(self.config.patch_resolution, self.config.patch_resolution, self.config.num_patches, 3)
+                .permute(2, 0, 1, 3)
+            )  # (num_patches, patch_resolution, patch_resolution, 3)
+            depth_patches = (
+                model_outputs_patches["depth"]
+                .reshape(self.config.patch_resolution, self.config.patch_resolution, self.config.num_patches, 1)
+                .permute(2, 0, 1, 3)[..., 0]
+            )  # (num_patches, patch_resolution, patch_resolution)
+
+        if self.config.use_regnerf_loss:
+            regnerf_loss = self.apply_regnerf_loss(step, depth_patches)
+            loss_dict["regnerf_loss"] = self.config.regnerf_loss_mult * regnerf_loss
