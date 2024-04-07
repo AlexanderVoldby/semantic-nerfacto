@@ -63,9 +63,9 @@ class SemanticNerfactoPipelineConfig(VanillaPipelineConfig):
     """Whether to use regularization on RGB patches"""
     use_regnerf_semantics_loss: bool = False
     """Whether to use regularization on semantics patches"""
-    regnerf_depth_loss_mult = 1e-6
-    regnerf_rgb_loss_mult = 1e-6
-    regnerf_semantics_loss_mult = 1e-6
+    regnerf_depth_loss_mult = 1
+    regnerf_rgb_loss_mult = 1
+    regnerf_semantics_loss_mult = 1
     """Loss multipliers for the regularization. Do i need to finetune these?"""
     
 
