@@ -122,7 +122,7 @@ class SemanticNerfactoPipeline(VanillaPipeline):
                 jitter_std=self.config.jitter_std,
                 center=self.config.center,
             )
-            # TODO(ethan): fix indices
+            # TODO: fix indices
             camera_indices = torch.tensor(list(range(self.config.num_patches))).unsqueeze(-1)
             ray_bundle_patches = cameras.generate_rays(
                 camera_indices
