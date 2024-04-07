@@ -38,11 +38,11 @@ class SemanticNerfactoPipelineConfig(VanillaPipelineConfig):
     """specifies the datamanager config"""
     model: ModelConfig = SemanticNerfactoModelConfig()
     """specifies the model config"""
-    use_regnerf_depth_loss: bool = True
+    use_regnerf_depth_loss: bool = False
     """Whether to use reqgularization on depth patches"""
-    use_regnerf_rgb_loss: bool = True
+    use_regnerf_rgb_loss: bool = False
     """Whether to use regularization on RGB patches"""
-    use_regnerf_semantics_loss: bool = True
+    use_regnerf_semantics_loss: bool = False
     """Whether to use regularization on RGB patches"""
     regnerf_depth_loss_mult = 1e-6
     regnerf_rgb_loss_mult = 1e-6
