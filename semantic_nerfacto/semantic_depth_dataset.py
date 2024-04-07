@@ -6,6 +6,12 @@ from PIL import Image
 from pathlib import Path
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 from rich.progress import track
+import cv2
+
+from detectron2 import model_zoo
+from detectron2.engine import DefaultPredictor
+from detectron2.config import get_cfg
+from detectron2.data import MetadataCatalog, DatasetCatalog
 
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs, Semantics
 from nerfstudio.data.datasets.base_dataset import InputDataset
@@ -33,6 +39,8 @@ class SemanticDepthDataset(InputDataset):
         # if not self.depth_filenames:
         # Currently always generate depth as LiDAR depth is sparse
         self._generate_depth_images(dataparser_outputs)
+        # TODO: Unsure if this will work
+        self._generate_segmentation_images(dataparser_outputs)
 
     def _generate_depth_images(self, dataparser_outputs: DataparserOutputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -57,6 +65,48 @@ class SemanticDepthDataset(InputDataset):
             self.depths = torch.stack(depth_tensors)
             np.save(cache, self.depths.cpu().numpy())
             self.depth_filenames = None
+
+    def _initialize_segmentor(self):
+        cfg = get_cfg()
+        cfg.merge_from_file(model_zoo.get_config_file("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml"))
+        cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml")
+        predictor = DefaultPredictor(cfg)
+        metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0])
+        return predictor, metadata
+
+    def _generate_segmentation_images(self, dataparser_outputs: DataparserOutputs):
+        CONSOLE.print("[bold yellow] Generating or loading semantic segmentations...")
+        segmentor, metadata = self._initialize_segmentor()
+        
+        cache = dataparser_outputs.image_filenames[0].parent / "segmentations.npy"
+        if cache.exists():
+            self.segmentations = torch.from_numpy(np.load(cache))
+        else:
+            segmentations = []
+            for image_filename in track(dataparser_outputs.image_filenames, description="Generating segmentations"):
+                image = cv2.imread(str(image_filename))
+                panoptic_seg, _ = segmentor(image)["panoptic_seg"]
+                segmentations.append(torch.from_numpy(panoptic_seg.cpu().numpy()))
+            self.segmentations = torch.stack(segmentations)
+            np.save(cache, self.segmentations.numpy())
+            self.segmentation_filenames = None
+        
+        metadict = {
+            "thing_classes": metadata.thing_classes,
+            "stuff_classes": metadata.stuff_classes,
+            "thing_colors": metadata.thing_colors,
+            "stuff_colors": metadata.stuff_colors,
+            "thing_dataset_id_to_contiguous_id": metadata.thing_dataset_id_to_contiguous_id,
+            "stuff_dataset_id_to_contiguous_id": metadata.stuff_dataset_id_to_contiguous_id
+        }
+        
+        data_dir = dataparser_outputs.metadata["data_dir"]
+        json_file_path = f"{data_dir}/panoptic_classes.json"
+
+        # Save the metadata to a JSON file
+        with open(json_file_path, 'w') as f:
+            json.dump(metadict, f, indent=4)
+            
 
     def get_metadata(self, data: Dict) -> Dict:
         

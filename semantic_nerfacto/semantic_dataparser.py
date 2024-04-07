@@ -9,6 +9,7 @@ from typing import Literal, Optional, Tuple, Type
 import numpy as np
 import torch
 from PIL import Image
+import os
 
 from nerfstudio.cameras import camera_utils
 from nerfstudio.cameras.cameras import CAMERA_MODEL_TO_TYPE, Cameras, CameraType
@@ -57,6 +58,7 @@ class SemanticNerf(Nerfstudio):
         image_filenames = []
         mask_filenames = []
         depth_filenames = []
+        semantic_filenames = []
         poses = []
 
         fx_fixed = "fl_x" in meta
@@ -369,15 +371,10 @@ class SemanticNerf(Nerfstudio):
 
         # --- semantics ---
         # TODO: Modify this part to correctly include semantics in the desired format
-        if self.config.include_semantics:
-            # empty_path = Path()
-            # replace_this_path = str(empty_path / images_folder / empty_path)
-            # with_this_path = str(empty_path / segmentations_folder / empty_path)
-            # filenames = [
-                # Path(str(image_filename).replace(replace_this_path, with_this_path).replace(".jpg", ".png"))
-                # for image_filename in image_filenames
-            # ]
-            filenames = [
+        panoptic_classes_path = self.config.data / "panoptic_classes.json"
+        if self.config.include_semantics and os.path.isfile(panoptic_classes_path):
+            
+            semantic_filenames = [
                 Path(str(image_filename).replace(images_folder, segmentations_folder).replace(".jpg", ".png"))
                 for image_filename in image_filenames
             ]
@@ -401,7 +398,7 @@ class SemanticNerf(Nerfstudio):
             mask_classes = [c for c in classes if c not in expected_classes]
             
             # TODO: Figure out how to use mask_classes and apply it
-            semantics = Semantics(filenames=filenames, classes=classes, colors=colors)
+            semantics = Semantics(filenames=semantic_filenames, classes=classes, colors=colors)
 
 
         dataparser_outputs = DataparserOutputs(
@@ -416,7 +413,8 @@ class SemanticNerf(Nerfstudio):
                 "depth_unit_scale_factor": self.config.depth_unit_scale_factor,
                 # Not sure whether we need to include semantic masks at some point
                 # "mask_color": self.config.mask_color, 
-                "semantics": semantics,
+                "semantics": semantics if len(semantic_filenames) > 0 else None,
+                "data_dir": self.config.data
                 **metadata,
             },
         )
