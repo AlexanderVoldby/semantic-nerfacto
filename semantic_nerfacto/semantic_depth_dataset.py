@@ -26,11 +26,11 @@ class SemanticDepthDataset(InputDataset):
 
     def __init__(self, dataparser_outputs: DataparserOutputs, scale_factor: float = 1.0):
         super().__init__(dataparser_outputs, scale_factor)
-        assert "semantics" in dataparser_outputs.metadata.keys() and isinstance(self.metadata["semantics"], Semantics)
-        self.semantics = self.metadata["semantics"]
-        self.mask_indices = torch.tensor(
-            [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
-        ).view(1, 1, -1)
+        # assert "semantics" in dataparser_outputs.metadata.keys() and isinstance(self.metadata["semantics"], Semantics)
+        # self.semantics = self.metadata["semantics"]
+        # self.mask_indices = torch.tensor(
+            # [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
+        # ).view(1, 1, -1)
 
         # Depth image handling
         # TODO if depth images already exist from LiDAR, extend them with pretrained model
@@ -38,9 +38,8 @@ class SemanticDepthDataset(InputDataset):
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
         # if not self.depth_filenames:
         # Currently always generate depth as LiDAR depth is sparse
-        self._generate_depth_images(dataparser_outputs)
-        # TODO: Unsure if this will work
         self._generate_segmentation_images(dataparser_outputs)
+        self._generate_depth_images(dataparser_outputs)
 
     def _generate_depth_images(self, dataparser_outputs: DataparserOutputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -71,7 +70,7 @@ class SemanticDepthDataset(InputDataset):
         cfg.merge_from_file(model_zoo.get_config_file("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml"))
         cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml")
         predictor = DefaultPredictor(cfg)
-        metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0])
+        metadata = MetadataCatalog.get(cfg.DATASETS.TRAIN[0])
         return predictor, metadata
 
     def _generate_segmentation_images(self, dataparser_outputs: DataparserOutputs):

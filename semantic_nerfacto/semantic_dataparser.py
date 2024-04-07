@@ -414,7 +414,7 @@ class SemanticNerf(Nerfstudio):
                 # Not sure whether we need to include semantic masks at some point
                 # "mask_color": self.config.mask_color, 
                 "semantics": semantics if len(semantic_filenames) > 0 else None,
-                "data_dir": self.config.data
+                "data_dir": self.config.data,
                 **metadata,
             },
         )
