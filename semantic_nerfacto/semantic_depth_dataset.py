@@ -27,13 +27,10 @@ class SemanticDepthDataset(InputDataset):
     def __init__(self, dataparser_outputs: DataparserOutputs, scale_factor: float = 1.0):
         super().__init__(dataparser_outputs, scale_factor)
         # assert "semantics" in dataparser_outputs.metadata.keys() and isinstance(self.metadata["semantics"], Semantics)
-        # self.semantics = self.metadata["semantics"]
-        # self.mask_indices = torch.tensor(
-            # [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
-        # ).view(1, 1, -1)
-
+        
         # Depth image handling
         # TODO if depth images already exist from LiDAR, extend them with pretrained model
+        self.semantics = self.metadata["semantics"]
         self.depth_filenames = self.metadata.get("depth_filenames")
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
         # if not self.depth_filenames:
@@ -77,7 +74,7 @@ class SemanticDepthDataset(InputDataset):
         CONSOLE.print("[bold yellow] Generating or loading semantic segmentations...")
         segmentor, metadata = self._initialize_segmentor()
         
-        cache = dataparser_outputs.image_filenames[0].parent / "segmentations.npy"
+        cache = dataparser_outputs.image_filenames[0].parent / "semantics.npy"
         if cache.exists():
             self.segmentations = torch.from_numpy(np.load(cache))
         else:
@@ -88,7 +85,7 @@ class SemanticDepthDataset(InputDataset):
                 segmentations.append(torch.from_numpy(panoptic_seg.cpu().numpy()))
             self.segmentations = torch.stack(segmentations)
             np.save(cache, self.segmentations.numpy())
-            self.segmentation_filenames = None
+            self.semantics = None
         
         metadict = {
             "thing_classes": metadata.thing_classes,
@@ -108,17 +105,24 @@ class SemanticDepthDataset(InputDataset):
             
 
     def get_metadata(self, data: Dict) -> Dict:
-        
-        # handle mask
-        filepath = self.semantics.filenames[data["image_idx"]]
-        semantic_label, mask = get_semantics_and_mask_tensors_from_path(
-            filepath=filepath, mask_indices=self.mask_indices, scale_factor=self.scale_factor
-        )
-        if "mask" in data.keys():
-            mask = mask & data["mask"]
+        image_idx = data["image_idx"]
+        # handle semantics
+        if self.semantics is None:
+            semantic_label = self.segmentations[image_idx]
+            #TODO: We don't use masks for anything but im not sure if this is smart?
+            mask = None
+        else:
+            filepath = self.semantics.filenames[image_idx]
+            mask_indices = torch.tensor(
+                [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
+            ).view(1, 1, -1)
+            semantic_label, mask = get_semantics_and_mask_tensors_from_path(
+                filepath=filepath, mask_indices=mask_indices, scale_factor=self.scale_factor
+            )
+            if "mask" in data.keys():
+                mask = mask & data["mask"]
         
         # Handle depth stuff
-        image_idx = data["image_idx"]
         if self.depth_filenames is None:
             depth_image = self.depths[image_idx]
         else:
