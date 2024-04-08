@@ -113,6 +113,7 @@ class SemanticDepthDataset(InputDataset):
             mask = None
         else:
             filepath = self.semantics.filenames[image_idx]
+            print(filepath)
             mask_indices = torch.tensor(
                 [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
             ).view(1, 1, -1)
