@@ -6,13 +6,6 @@ from PIL import Image
 from pathlib import Path
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 from rich.progress import track
-import cv2
-import os
-
-from detectron2 import model_zoo
-from detectron2.engine import DefaultPredictor
-from detectron2.config import get_cfg
-from detectron2.data import MetadataCatalog, DatasetCatalog
 
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs, Semantics
 from nerfstudio.data.datasets.base_dataset import InputDataset
@@ -27,16 +20,18 @@ class SemanticDepthDataset(InputDataset):
 
     def __init__(self, dataparser_outputs: DataparserOutputs, scale_factor: float = 1.0):
         super().__init__(dataparser_outputs, scale_factor)
-        # assert "semantics" in dataparser_outputs.metadata.keys() and isinstance(self.metadata["semantics"], Semantics)
-        
+        assert "semantics" in dataparser_outputs.metadata.keys() and isinstance(self.metadata["semantics"], Semantics)
+        self.semantics = self.metadata["semantics"]
+        self.mask_indices = torch.tensor(
+            [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
+        ).view(1, 1, -1)
+
         # Depth image handling
         # TODO if depth images already exist from LiDAR, extend them with pretrained model
-        self.semantics = self.metadata["semantics"]
         self.depth_filenames = self.metadata.get("depth_filenames")
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
         # if not self.depth_filenames:
         # Currently always generate depth as LiDAR depth is sparse
-        self._generate_segmentation_images(dataparser_outputs)
         self._generate_depth_images(dataparser_outputs)
 
     def _generate_depth_images(self, dataparser_outputs: DataparserOutputs):
@@ -63,81 +58,18 @@ class SemanticDepthDataset(InputDataset):
             np.save(cache, self.depths.cpu().numpy())
             self.depth_filenames = None
 
-    def _initialize_segmentor(self):
-        cfg = get_cfg()
-        cfg.merge_from_file(model_zoo.get_config_file("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml"))
-        cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml")
-        predictor = DefaultPredictor(cfg)
-        metadata = MetadataCatalog.get(cfg.DATASETS.TRAIN[0])
-        return predictor, metadata
-
-    def _generate_segmentation_images(self, dataparser_outputs: DataparserOutputs):
-        CONSOLE.print("[bold yellow] Generating or loading semantic segmentations...")
-        segmentor, metadata = self._initialize_segmentor()
-        
-        cache = dataparser_outputs.image_filenames[0].parent / "segmentations.npy"
-        segmentation_dir = dataparser_outputs.metadata["data_dir"] / "segmentations"
-        if not os.path.exists(segmentation_dir):
-            os.makedirs(segmentation_dir)
-        if cache.exists():
-            self.segmentations = torch.from_numpy(np.load(cache))
-        else:
-            segmentations = []
-            image_dir = dataparser_outputs.metadata["data_dir"] / "images"
-            image_filenames = [os.path.join(image_dir, f) for f in os.listdir(image_dir) if f.endswith(".jpg")]
-            print(image_filenames)
-            for image_filename in track(image_filenames, description="Generating segmentations"):
-                image = cv2.imread(str(image_filename))
-                panoptic_seg, _ = segmentor(image)["panoptic_seg"]
-                panoptic_seg = panoptic_seg.cpu().numpy()
-                segmentations.append(torch.from_numpy(panoptic_seg))
-                
-                semantic_filename = str(image_filename).replace("images", "segmentations").replace(".jpg", ".png")
-                
-                print(image_filename)
-                cv2.imwrite(semantic_filename, panoptic_seg)
-
-                
-            self.segmentations = torch.stack(segmentations)
-            np.save(cache, self.segmentations.numpy())
-            self.semantics = None
-        
-        metadict = {
-            "thing_classes": metadata.thing_classes,
-            "stuff_classes": metadata.stuff_classes,
-            "thing_colors": metadata.thing_colors,
-            "stuff_colors": metadata.stuff_colors,
-            "thing_dataset_id_to_contiguous_id": metadata.thing_dataset_id_to_contiguous_id,
-            "stuff_dataset_id_to_contiguous_id": metadata.stuff_dataset_id_to_contiguous_id
-        }
-        
-        data_dir = dataparser_outputs.metadata["data_dir"]
-        json_file_path = f"{data_dir}/panoptic_classes.json"
-
-        # Save the metadata to a JSON file
-        with open(json_file_path, 'w') as f:
-            json.dump(metadict, f, indent=4)
-            
-
     def get_metadata(self, data: Dict) -> Dict:
-        image_idx = data["image_idx"]
-        # handle semantics
-        if self.semantics is None:
-            semantic_label = self.segmentations[image_idx]
-            #TODO: We don't use masks for anything but im not sure if this is smart?
-            mask = None
-        else:
-            filepath = self.semantics.filenames[image_idx]
-            mask_indices = torch.tensor(
-                [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
-            ).view(1, 1, -1)
-            semantic_label, mask = get_semantics_and_mask_tensors_from_path(
-                filepath=filepath, mask_indices=mask_indices, scale_factor=self.scale_factor
-            )
-            if "mask" in data.keys():
-                mask = mask & data["mask"]
+        
+        # handle mask
+        filepath = self.semantics.filenames[data["image_idx"]]
+        semantic_label, mask = get_semantics_and_mask_tensors_from_path(
+            filepath=filepath, mask_indices=self.mask_indices, scale_factor=self.scale_factor
+        )
+        if "mask" in data.keys():
+            mask = mask & data["mask"]
         
         # Handle depth stuff
+        image_idx = data["image_idx"]
         if self.depth_filenames is None:
             depth_image = self.depths[image_idx]
         else:
@@ -148,9 +80,7 @@ class SemanticDepthDataset(InputDataset):
             depth_image = get_depth_image_from_path(
                 filepath=filepath, height=height, width=width, scale_factor=scale_factor
             )
-        # We don't use masks so maybe just don't pass them?
-        # return {"mask": mask, "semantics": semantic_label, "depth_image": depth_image}
-        return {"semantics": semantic_label, "depth_image": depth_image}
+        return {"mask": mask, "semantics": semantic_label, "depth_image": depth_image}
     
     def _find_transform(self, image_path: Path) -> Union[Path, None]:
         while image_path.parent != image_path:
