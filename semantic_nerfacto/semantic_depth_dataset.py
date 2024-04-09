@@ -7,6 +7,7 @@ from pathlib import Path
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 from rich.progress import track
 import cv2
+import os
 
 from detectron2 import model_zoo
 from detectron2.engine import DefaultPredictor
@@ -74,15 +75,29 @@ class SemanticDepthDataset(InputDataset):
         CONSOLE.print("[bold yellow] Generating or loading semantic segmentations...")
         segmentor, metadata = self._initialize_segmentor()
         
-        cache = dataparser_outputs.image_filenames[0].parent / "semantics.npy"
+        cache = dataparser_outputs.image_filenames[0].parent / "segmentations.npy"
+        segmentation_dir = dataparser_outputs.metadata["data_dir"] / "segmentations"
+        if not os.path.exists(segmentation_dir):
+            os.makedirs(segmentation_dir)
         if cache.exists():
             self.segmentations = torch.from_numpy(np.load(cache))
         else:
             segmentations = []
-            for image_filename in track(dataparser_outputs.image_filenames, description="Generating segmentations"):
+            image_dir = dataparser_outputs.metadata["data_dir"] / "images"
+            image_filenames = [os.path.join(image_dir, f) for f in os.listdir(image_dir) if f.endswith(".jpg")]
+            print(image_filenames)
+            for image_filename in track(image_filenames, description="Generating segmentations"):
                 image = cv2.imread(str(image_filename))
                 panoptic_seg, _ = segmentor(image)["panoptic_seg"]
-                segmentations.append(torch.from_numpy(panoptic_seg.cpu().numpy()))
+                panoptic_seg = panoptic_seg.cpu().numpy()
+                segmentations.append(torch.from_numpy(panoptic_seg))
+                
+                semantic_filename = str(image_filename).replace("images", "segmentations").replace(".jpg", ".png")
+                
+                print(image_filename)
+                cv2.imwrite(semantic_filename, panoptic_seg)
+
+                
             self.segmentations = torch.stack(segmentations)
             np.save(cache, self.segmentations.numpy())
             self.semantics = None
@@ -113,7 +128,6 @@ class SemanticDepthDataset(InputDataset):
             mask = None
         else:
             filepath = self.semantics.filenames[image_idx]
-            print(filepath)
             mask_indices = torch.tensor(
                 [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
             ).view(1, 1, -1)
@@ -134,7 +148,9 @@ class SemanticDepthDataset(InputDataset):
             depth_image = get_depth_image_from_path(
                 filepath=filepath, height=height, width=width, scale_factor=scale_factor
             )
-        return {"mask": mask, "semantics": semantic_label, "depth_image": depth_image}
+        # We don't use masks so maybe just don't pass them?
+        # return {"mask": mask, "semantics": semantic_label, "depth_image": depth_image}
+        return {"semantics": semantic_label, "depth_image": depth_image}
     
     def _find_transform(self, image_path: Path) -> Union[Path, None]:
         while image_path.parent != image_path:
