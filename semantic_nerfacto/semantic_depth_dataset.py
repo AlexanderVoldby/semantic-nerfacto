@@ -1,7 +1,8 @@
 from typing import Dict, Union
-import json
 import numpy as np
 import torch
+from tqdm import tqdm
+from scipy.stats import linregress
 from PIL import Image
 from pathlib import Path
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
@@ -34,29 +35,57 @@ class SemanticDepthDataset(InputDataset):
         # Currently always generate depth as LiDAR depth is sparse
         self._generate_depth_images(dataparser_outputs)
 
-    def _generate_depth_images(self, dataparser_outputs: DataparserOutputs):
+    def _load_lidar_depths(self):
+        lidar_depths = []
+        for depth_filename in self.depth_filenames:
+            with Image.open(depth_filename) as img:
+                depth_array = np.array(img)
+                depth_tensor = torch.from_numpy(depth_array).float()
+                lidar_depths.append(depth_tensor)
+
+        return torch.stack(lidar_depths) if lidar_depths else None
+
+    def _generate_depth_images(self, dataparser_outputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         cache = dataparser_outputs.image_filenames[0].parent / "depths.npy"
         if cache.exists():
-            CONSOLE.print("[bold yellow] Loading pseudodata depth from cache!")
+            print("Loading pseudodata depth from cache!")
             self.depths = torch.from_numpy(np.load(cache)).to(device)
         else:
-            CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
-            losses.FORCE_PSEUDODEPTH_LOSS = True
+            print("No depth data found! Generating pseudodepth...")
             depth_tensors = []
             repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
-            for image_filename in track(dataparser_outputs.image_filenames, description="Generating depth images"):
+            for image_filename in tqdm(dataparser_outputs.image_filenames, desc="Generating depth images"):
                 pil_image = Image.open(image_filename)
                 inputs = image_processor(images=pil_image, return_tensors="pt")
                 with torch.no_grad():
                     outputs = model(**inputs)
                     predicted_depth = outputs.predicted_depth
                 depth_tensors.append(predicted_depth)
-            self.depths = torch.stack(depth_tensors)
-            np.save(cache, self.depths.cpu().numpy())
-            self.depth_filenames = None
+            depths = torch.stack(depth_tensors)
+            
+        # Load LiDAR depth data
+        lidar_depths = self._load_lidar_depths()
+
+        if lidar_depths is not None:
+            # Compute scale and shift between monocular and LiDAR depths
+            scale, shift = self.compute_scale_shift(depths, lidar_depths)
+            self.adjusted_depths = scale * self.depths + shift
+        else:
+            print("No LiDAR depth data available for scaling and shifting.")
+            
+        np.save(cache, self.adjusted_depths.cpu().numpy())
+        self.depth_filenames = None
+
+    def compute_scale_shift(self, monocular_depths, lidar_depths):
+        valid_mask = lidar_depths > 0  # Assuming zero where no LiDAR data
+        scaled_monocular = monocular_depths[valid_mask].flatten()
+        lidar_depths_flat = lidar_depths[valid_mask].flatten()
+
+        slope, intercept, r_value, p_value, std_err = linregress(scaled_monocular.numpy(), lidar_depths_flat.numpy())
+        return slope, intercept
 
     def get_metadata(self, data: Dict) -> Dict:
         
