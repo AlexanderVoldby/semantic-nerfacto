@@ -1,5 +1,5 @@
 """
-Pipeline for depth nerfacto. Very similar to vanilla pipeline
+Pipeline for  semantic depth nerfacto. Very similar to vanilla pipeline
 """
 
 import torch
@@ -28,10 +28,10 @@ from nerfstudio.pipelines.base_pipeline import (
 from nerfstudio.utils import profiler
 
 @dataclass
-class SemanticNerfactoPipelineConfig(VanillaPipelineConfig):
+class SemanticDepthNerfactoPipelineConfig(VanillaPipelineConfig):
     """Configuration for pipeline instantiation"""
 
-    _target: Type = field(default_factory=lambda: SemanticNerfactoPipeline)
+    _target: Type = field(default_factory=lambda: SemanticDepthNerfactoPipeline)
     """target class to instantiate"""
     datamanager: DataManagerConfig = SemanticNerfactoDataManagerConfig()
     """specifies the datamanager config"""
@@ -39,7 +39,7 @@ class SemanticNerfactoPipelineConfig(VanillaPipelineConfig):
     """specifies the model config"""
 
 
-class SemanticNerfactoPipeline(VanillaPipeline):
+class SemanticDepthNerfactoPipeline(VanillaPipeline):
     """Template Pipeline
 
     Args:
@@ -48,7 +48,7 @@ class SemanticNerfactoPipeline(VanillaPipeline):
 
     def __init__(
         self,
-        config: SemanticNerfactoPipelineConfig,
+        config: SemanticDepthNerfactoPipelineConfig,
         device: str,
         test_mode: Literal["test", "val", "inference"] = "val",
         world_size: int = 1,
