@@ -1,6 +1,7 @@
 from typing import Dict, Union
 import numpy as np
 import torch
+import torch.nn.functional as F
 from tqdm import tqdm
 from scipy.stats import linregress
 from PIL import Image
@@ -15,6 +16,16 @@ from nerfstudio.model_components import losses
 from nerfstudio.utils.misc import torch_compile
 from nerfstudio.utils.rich_utils import CONSOLE
 
+def upsample_depth(depth_tensor, target_height, target_width):
+    # Helper function to upsaple monocular depth to the same size as liDAR depth
+    if depth_tensor.dim() == 2:
+        depth_tensor = depth_tensor.unsqueeze(0).unsqueeze(0)
+    elif depth_tensor.dim() == 3:
+        depth_tensor = depth_tensor.unsqueeze(1)
+    
+    # Upsample to match the input image size
+    depth_upsampled = F.interpolate(depth_tensor, size=(target_height, target_width), mode='bilinear', align_corners=False)
+    return depth_upsampled.squeeze()  # remove extra dimensions if added
 
 class SemanticDepthDataset(InputDataset):
     exclude_batch_keys_from_device = InputDataset.exclude_batch_keys_from_device + ["mask", "semantics", "depth_image"]
@@ -50,7 +61,7 @@ class SemanticDepthDataset(InputDataset):
         cache = dataparser_outputs.image_filenames[0].parent / "depths.npy"
         if cache.exists():
             print("Loading pseudodata depth from cache!")
-            self.depths = torch.from_numpy(np.load(cache)).to(device)
+            depths = torch.from_numpy(np.load(cache)).to(device)
         else:
             print("No depth data found! Generating pseudodepth...")
             depth_tensors = []
@@ -63,21 +74,23 @@ class SemanticDepthDataset(InputDataset):
                 with torch.no_grad():
                     outputs = model(**inputs)
                     predicted_depth = outputs.predicted_depth
-                depth_tensors.append(predicted_depth)
+                    # Hardcode the output size from Polycam
+                    upsampled_depth = upsample_depth(predicted_depth, 738, 994)
+                depth_tensors.append(upsampled_depth)
             depths = torch.stack(depth_tensors)
             
-        # Load LiDAR depth data
-        lidar_depths = self._load_lidar_depths()
+            # Load LiDAR depth data
+            lidar_depths = self._load_lidar_depths()
 
-        if lidar_depths is not None:
-            # Compute scale and shift between monocular and LiDAR depths
-            scale, shift = self.compute_scale_shift(depths, lidar_depths)
-            self.adjusted_depths = scale * self.depths + shift
-        else:
-            print("No LiDAR depth data available for scaling and shifting.")
-            
-        np.save(cache, self.adjusted_depths.cpu().numpy())
-        self.depth_filenames = None
+            if lidar_depths is not None:
+                # Compute scale and shift between monocular and LiDAR depths
+                scale, shift = self.compute_scale_shift(depths.cpu(), lidar_depths)
+                self.depths = scale * depths.cpu() + shift
+            else:
+                print("No LiDAR depth data available for scaling and shifting.")
+                
+            np.save(cache, self.depths)
+            self.depth_filenames = None
 
     def compute_scale_shift(self, monocular_depths, lidar_depths):
         valid_mask = lidar_depths > 0  # Assuming zero where no LiDAR data
