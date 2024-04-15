@@ -1,0 +1,146 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from typing import Literal
+
+import torch
+from typing_extensions import Annotated
+
+from nerfstudio.cameras.camera_paths import get_interpolated_camera_path
+from nerfstudio.cameras.cameras import Cameras
+from nerfstudio.utils.eval_utils import eval_setup
+from nerfstudio.scripts.render import BaseRender, _render_trajectory_video
+from nerfstudio.cameras.camera_utils import normalize, rotation_matrix
+
+@dataclass
+class RenderDepthBasedTransformedPath(BaseRender):
+    pose_source: Literal["train", "eval"] = "eval"
+    interpolation_steps: int = 20
+    transform_cameras: bool = True
+
+    def main(self) -> None:
+        config, pipeline, _, _ = eval_setup(
+            self.load_config,
+            eval_num_rays_per_chunk=self.eval_num_rays_per_chunk,
+            test_mode="test",
+        )
+
+        if self.pose_source == "eval":
+            cameras = pipeline.datamanager.eval_dataset.cameras
+        else:
+            cameras = pipeline.datamanager.train_dataset.cameras
+
+        if self.transform_cameras:
+            cameras = self.apply_density_based_transformations(camera_path, pipeline)
+
+        # Sample and interpolate cameras
+        camera_path = get_interpolated_camera_path(
+            cameras=cameras,
+            steps=self.interpolation_steps,
+            order_poses=True,  # Assuming you might want to order by proximity or another metric
+        )
+
+
+        # Render the trajectory video with transformed camera path
+        _render_trajectory_video(
+            pipeline,
+            camera_path,
+            output_filename=self.output_path,
+            rendered_output_names=self.rendered_output_names,
+            rendered_resolution_scaling_factor=1.0 / self.downscale_factor,
+            seconds= self.interpolation_steps * len(camera_path) / self.frame_rate,
+            output_format=self.output_format,
+            image_format=self.image_format,
+            depth_near_plane=self.depth_near_plane,
+            depth_far_plane=self.depth_far_plane,
+            colormap_options=self.colormap_options,
+            render_nearest_camera=self.render_nearest_camera,
+            check_occlusions=self.check_occlusions,
+        )
+
+    def apply_depth_based_transformations(self, cameras, pipeline):
+        transformed_cameras = []
+        
+        # Generate rays and sample density
+        central_ray_bundles = get_central_rays(cameras)
+        # Get the dpeth of the central rays
+        depths = get_depths_of_central_rays(central_ray_bundles, pipeline)
+
+        # Compute transformation for camera based on depths
+        new_camera_matrices = compute_transformations(cameras, depths)
+        fx = cameras.fx
+        fy = cameras.fy
+        cx = cameras.cx
+        cy = cameras.cy
+        return Cameras(new_camera_matrices, fx, fy, cx, cy)
+
+def compute_transformations(cameras, depths):
+    """Transform each camera based on the corresponding depth and reverse its direction."""
+    new_camera_matrices = []
+
+    for idx, depth in enumerate(depths):
+        camera_matrix = cameras.camera_to_worlds[idx]
+        R = camera_matrix[:3, :3]
+        t = camera_matrix[:3, 3]
+
+        # The look_at direction is the negative of the third column of R
+        look_at = -R[:, 2]
+
+        # Normalize and compute translation vector
+        look_at_normalized = normalize(look_at.unsqueeze(0)).squeeze(0)
+        translation_vector = look_at_normalized * depth
+
+        # Compute new camera position
+        new_position = t + translation_vector
+
+        # Compute new look_at vector (pointing in the opposite direction)
+        new_look_at = -look_at_normalized
+
+        # Compute rotation to align the new look_at with the z-axis
+        z_axis = torch.tensor([0, 0, 1], device=camera_matrix.device)
+        R_new = rotation_matrix(new_look_at, z_axis)
+
+        # Create new camera matrix
+        new_camera_matrix = torch.eye(4, device=camera_matrix.device)
+        new_camera_matrix[:3, :3] = R_new
+        new_camera_matrix[:3, 3] = new_position
+
+        new_camera_matrices.append(new_camera_matrix)
+
+    return new_camera_matrices
+
+
+def get_central_rays(cameras):
+    """Compute the central rays for all cameras in the Cameras object."""
+    # Central pixel coordinates
+    central_x = cameras.cx
+    central_y = cameras.cy
+
+    # Create image coordinates for the central ray of each camera
+    batch_size = central_x.shape[0]  # Number of cameras
+    image_coords = torch.stack([central_y.squeeze(-1), central_x.squeeze(-1)], dim=-1)  # Ensure shape is [N, 2]
+
+    # Generate rays for all cameras
+    central_ray_bundles = []
+    for idx in range(batch_size):
+        ray_bundle = cameras.generate_rays(
+            camera_indices=idx,
+            coords=image_coords[idx].unsqueeze(0)  # Add batch dimension
+        )
+        central_ray_bundles.append(ray_bundle)
+
+    return central_ray_bundles
+
+def get_depths_of_central_rays(pipeline, cameras):
+    """Get the depths of the central rays for all cameras using the pipeline."""
+    central_ray_bundles = get_central_rays(cameras)
+    depths = []
+
+    for ray_bundle in central_ray_bundles:
+        # Retrieve depth from the model for each central ray
+        outputs = pipeline.model.get_outputs(ray_bundle)
+        central_ray_depth = outputs['depth']  # Assumes depth is returned here
+        depths.append(central_ray_depth)
+
+    return depths
