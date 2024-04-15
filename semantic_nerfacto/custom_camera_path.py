@@ -6,6 +6,8 @@ from typing import Literal
 
 import torch
 from typing_extensions import Annotated
+import json
+import numpy as np
 
 from nerfstudio.cameras.camera_paths import get_interpolated_camera_path
 from nerfstudio.cameras.cameras import Cameras
@@ -20,11 +22,17 @@ class RenderDepthBasedTransformedPath(BaseRender):
     transform_cameras: bool = True
 
     def main(self) -> None:
-        config, pipeline, _, _ = eval_setup(
+        config, pipeline, checkpoint_path, step = eval_setup(
             self.load_config,
             eval_num_rays_per_chunk=self.eval_num_rays_per_chunk,
             test_mode="test",
         )
+        
+        # Get the dataparser_transforms that is applied to take the camera frames from
+        # world coordinates to camera coordinates
+        dataparser_transforms = json.load(checkpoint_path.parent.parent / "dataparser_transforms.json")
+        transform = dataparser_transforms["transform"]
+        scale = dataparser_transforms["scale"]
 
         if self.pose_source == "eval":
             cameras = pipeline.datamanager.eval_dataset.cameras
@@ -60,8 +68,6 @@ class RenderDepthBasedTransformedPath(BaseRender):
         )
 
     def apply_depth_based_transformations(self, cameras, pipeline):
-        transformed_cameras = []
-        
         # Generate rays and sample density
         central_ray_bundles = get_central_rays(cameras)
         # Get the dpeth of the central rays
@@ -74,6 +80,34 @@ class RenderDepthBasedTransformedPath(BaseRender):
         cx = cameras.cx
         cy = cameras.cy
         return Cameras(new_camera_matrices, fx, fy, cx, cy)
+
+def camera_coordinates_to_world_coordinates(transformation_matrix, scale_factor):
+    """
+    Computes the inverse of a scaled 3x4 transformation matrix where the scale factor
+    is applied after the matrix transformation.
+
+    Args:
+    transformation_matrix (numpy.ndarray): A 3x4 matrix representing rotation and translation.
+    scale_factor (float): The scale factor applied after the matrix transformation.
+
+    Returns:
+    numpy.ndarray: The inverse transformation matrix.
+    """
+    # Extract the rotation and translation components from the 3x4 matrix
+    rotation_matrix = transformation_matrix[:, :3]
+    translation_vector = transformation_matrix[:, 3]
+
+    # Compute the inverse of the rotation matrix
+    inverse_rotation_matrix = np.linalg.inv(rotation_matrix)
+
+    # Adjust the translation vector for the scale and compute its inverse transformation
+    scaled_translation_vector = translation_vector / scale_factor
+    inverse_translation_vector = -inverse_rotation_matrix @ scaled_translation_vector
+
+    # Construct the full inverse transformation matrix (3x4)
+    inverse_transformation_matrix = np.hstack((inverse_rotation_matrix, inverse_translation_vector.reshape(-1, 1)))
+
+    return inverse_transformation_matrix
 
 def compute_transformations(cameras, depths):
     """Transform each camera based on the corresponding depth and reverse its direction."""
