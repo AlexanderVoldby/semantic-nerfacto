@@ -401,7 +401,7 @@ class SemanticNerf(Nerfstudio):
             mask_classes = ["chair", "bed", "door-stuff", "table", "window", "ceiling", "floor", "wall"]
             
             # TODO: Figure out how to use mask_classes and apply it
-            semantics = Semantics(filenames=filenames, classes=classes, colors=colors, mask_classes=mask_classes)
+            semantics = Semantics(filenames=filenames, classes=classes, colors=colors, mask_classes=["wall"])
 
 
         dataparser_outputs = DataparserOutputs(
