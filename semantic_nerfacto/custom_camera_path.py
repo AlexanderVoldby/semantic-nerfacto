@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 from typing import Literal
@@ -37,13 +35,17 @@ class RenderDepthBasedTransformedPath(BaseRender):
 
         # Get the dataparser_transforms that is applied to take the camera frames from
         # world coordinates to camera coordinates
-        dataparser_transforms = json.load(checkpoint_path.parent.parent / "dataparser_transforms.json")
-        self.transform = dataparser_transforms["transform"]
+        f = open(checkpoint_path.parent.parent / "dataparser_transforms.json")
+        dataparser_transforms = json.load(f)
+        self.transform = torch.tensor(dataparser_transforms["transform"])
         self.scale = dataparser_transforms["scale"]
-        cameras_original_space = transform_poses_to_original_space(cameras, self.transform, self.scale)
+        f.close()
+
+        poses_original_space = transform_poses_to_original_space(cameras.camera_to_worlds, self.transform, self.scale)
+        cameras.camera_to_worlds = poses_original_space
 
         if self.transform_cameras:
-            cameras = self.apply_density_based_transformations(camera_path, pipeline)
+            cameras = apply_depth_based_transformations(cameras, pipeline, self.scale)
 
         # Sample and interpolate cameras
         camera_path = get_interpolated_camera_path(
@@ -70,20 +72,21 @@ class RenderDepthBasedTransformedPath(BaseRender):
             check_occlusions=self.check_occlusions,
         )
 
-    def apply_depth_based_transformations(self, cameras, pipeline):
-        # Generate rays and sample density
-        central_ray_bundles = get_central_rays(cameras)
-        # Get the depth of the central rays
-        # TODO: Check if scaling by the scale from dataparser_transforms is adequate
-        depths = self.scale * get_depths_of_central_rays(central_ray_bundles, pipeline)
+def apply_depth_based_transformations(cameras, pipeline, scale):
+	# Generate rays and sample density
+	central_ray_bundles = get_central_rays(cameras)
+	print(central_ray_bundles)
+	# Get the depth of the central rays
+	# TODO: Check if scaling by the scale from dataparser_transforms is adequate
+	depths = scale * get_depths_of_central_rays(central_ray_bundles, pipeline)
 
-        # Compute transformation for camera based on depths
-        new_camera_matrices = compute_transformations(cameras, depths)
-        fx = cameras.fx
-        fy = cameras.fy
-        cx = cameras.cx
-        cy = cameras.cy
-        return Cameras(new_camera_matrices, fx, fy, cx, cy)
+	# Compute transformation for camera based on depths
+	new_camera_matrices = compute_transformations(cameras, depths)
+	fx = cameras.fx
+	fy = cameras.fy
+	cx = cameras.cx
+	cy = cameras.cy
+	return Cameras(new_camera_matrices, fx, fy, cx, cy)
 
 def camera_coordinates_to_world_coordinates(transformation_matrix, scale_factor):
     """
@@ -170,14 +173,13 @@ def get_central_rays(cameras):
 
     return central_ray_bundles
 
-def get_depths_of_central_rays(pipeline, cameras):
+def get_depths_of_central_rays(ray_bundle, pipeline):
     """Get the depths of the central rays for all cameras using the pipeline."""
-    central_ray_bundles = get_central_rays(cameras)
     depths = []
 
-    for ray_bundle in central_ray_bundles:
+    for ray in ray_bundle:
         # Retrieve depth from the model for each central ray
-        outputs = pipeline.model.get_outputs(ray_bundle)
+        outputs = pipeline.model.get_outputs(ray)
         central_ray_depth = outputs['depth']  # Assumes depth is returned here
         depths.append(central_ray_depth)
 
