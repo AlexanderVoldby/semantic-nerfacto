@@ -398,10 +398,10 @@ class SemanticNerf(Nerfstudio):
             
             # List of classes that we exclude from training. These are masked out from training for all modalitites
             # TODO: Passing class masks with no nonzero indices (non-existing classes) throws an error
-            mask_classes = [c for c in classes if c not in expected_classes]
+            mask_classes = ["chair", "bed", "door-stuff", "table", "window", "ceiling", "floor", "wall"]
             
             # TODO: Figure out how to use mask_classes and apply it
-            semantics = Semantics(filenames=filenames, classes=classes, colors=colors)
+            semantics = Semantics(filenames=filenames, classes=classes, colors=colors, mask_classes=mask_classes)
 
 
         dataparser_outputs = DataparserOutputs(

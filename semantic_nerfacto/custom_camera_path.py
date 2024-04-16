@@ -14,6 +14,7 @@ from nerfstudio.cameras.cameras import Cameras
 from nerfstudio.utils.eval_utils import eval_setup
 from nerfstudio.scripts.render import BaseRender, _render_trajectory_video
 from nerfstudio.cameras.camera_utils import normalize, rotation_matrix
+from nerfstudio.data.dataparsers.base_dataparser import transform_poses_to_original_space
 
 @dataclass
 class RenderDepthBasedTransformedPath(BaseRender):
@@ -28,16 +29,18 @@ class RenderDepthBasedTransformedPath(BaseRender):
             test_mode="test",
         )
         
-        # Get the dataparser_transforms that is applied to take the camera frames from
-        # world coordinates to camera coordinates
-        dataparser_transforms = json.load(checkpoint_path.parent.parent / "dataparser_transforms.json")
-        transform = dataparser_transforms["transform"]
-        scale = dataparser_transforms["scale"]
 
         if self.pose_source == "eval":
             cameras = pipeline.datamanager.eval_dataset.cameras
         else:
             cameras = pipeline.datamanager.train_dataset.cameras
+
+        # Get the dataparser_transforms that is applied to take the camera frames from
+        # world coordinates to camera coordinates
+        dataparser_transforms = json.load(checkpoint_path.parent.parent / "dataparser_transforms.json")
+        self.transform = dataparser_transforms["transform"]
+        self.scale = dataparser_transforms["scale"]
+        cameras_original_space = transform_poses_to_original_space(cameras, self.transform, self.scale)
 
         if self.transform_cameras:
             cameras = self.apply_density_based_transformations(camera_path, pipeline)
@@ -70,8 +73,9 @@ class RenderDepthBasedTransformedPath(BaseRender):
     def apply_depth_based_transformations(self, cameras, pipeline):
         # Generate rays and sample density
         central_ray_bundles = get_central_rays(cameras)
-        # Get the dpeth of the central rays
-        depths = get_depths_of_central_rays(central_ray_bundles, pipeline)
+        # Get the depth of the central rays
+        # TODO: Check if scaling by the scale from dataparser_transforms is adequate
+        depths = self.scale * get_depths_of_central_rays(central_ray_bundles, pipeline)
 
         # Compute transformation for camera based on depths
         new_camera_matrices = compute_transformations(cameras, depths)
