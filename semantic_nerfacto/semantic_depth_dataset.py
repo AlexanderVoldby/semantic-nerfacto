@@ -86,7 +86,7 @@ class SemanticDepthDataset(InputDataset):
                 # Compute scale and shift between monocular and LiDAR depths
                 scale, shift = self.compute_scale_shift(depths.cpu(), lidar_depths)
                 self.depths = scale * depths.cpu() + shift
-                # Use the lidara depth in places where it exists and other wise the monocular depth.
+                # Use the lidar depth in places where it exists and other wise the monocular depth.
                 self.depths = self.depths[lidar_depths[lidar_depths < 0]]
             else:
                 print("No LiDAR depth data available for scaling and shifting.")

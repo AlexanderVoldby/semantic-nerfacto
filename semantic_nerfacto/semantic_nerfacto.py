@@ -112,7 +112,7 @@ class SemanticNerfactoModel(NerfactoModel):
             pass_semantic_gradients=self.config.pass_semantic_gradients,
             # TODO: Find out how to set number of classes, default is 100
             # Hardcoded 134 classes = Detectron default
-            num_semantic_classes=134
+            num_semantic_classes=len(self.semantics.classes)
         )
 
         # TODO: Current colormap generation works fine without this
