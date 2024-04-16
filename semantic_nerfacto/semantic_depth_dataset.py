@@ -1,6 +1,7 @@
 from typing import Dict, Union
 import numpy as np
 import torch
+import json
 import torch.nn.functional as F
 from tqdm import tqdm
 from scipy.stats import linregress
@@ -65,9 +66,11 @@ class SemanticDepthDataset(InputDataset):
         else:
             print("No depth data found! Generating pseudodepth...")
             depth_tensors = []
-            repo = "LiheYoung/depth-anything-base-hf"
+            # Change to small to speed up otherwise use depth-anything-base
+            repo = "LiheYoung/depth-anything-small-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
+            
             for image_filename in tqdm(dataparser_outputs.image_filenames, desc="Generating depth images"):
                 pil_image = Image.open(image_filename)
                 inputs = image_processor(images=pil_image, return_tensors="pt")
@@ -78,6 +81,8 @@ class SemanticDepthDataset(InputDataset):
                     upsampled_depth = upsample_depth(predicted_depth, 738, 994)
                 depth_tensors.append(upsampled_depth)
             depths = torch.stack(depth_tensors)
+            print(f"Depths shape after generating: {depths.shape}")
+            
             
             # Load LiDAR depth data
             lidar_depths = self._load_lidar_depths()
@@ -87,12 +92,19 @@ class SemanticDepthDataset(InputDataset):
                 scale, shift = self.compute_scale_shift(depths.cpu(), lidar_depths)
                 self.depths = scale * depths.cpu() + shift
                 # Use the lidar depth in places where it exists and other wise the monocular depth.
-                self.depths = self.depths[lidar_depths[lidar_depths < 0]]
+                valid_mask = lidar_depths > 0
+                self.depths[valid_mask] = lidar_depths[valid_mask]
             else:
                 print("No LiDAR depth data available for scaling and shifting.")
                 
             np.save(cache, self.depths)
             self.depth_filenames = None
+            
+        # Save filename and index to later retrieve correspondng depth image from dataset since dataparser_outputs removes some depth images
+        itd = {i: str(image_filename) for i, image_filename in enumerate(dataparser_outputs.image_filenames)}
+        data_dir = str(dataparser_outputs.image_filenames[0].parent.parent)
+        with open(data_dir + "/index_to_depth.json", "w") as outfile: 
+            json.dump(itd, outfile)
 
     def compute_scale_shift(self, monocular_depths, lidar_depths):
         valid_mask = lidar_depths > 0  # Assuming zero where no LiDAR data
