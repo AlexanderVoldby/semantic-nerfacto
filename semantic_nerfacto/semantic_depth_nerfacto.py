@@ -6,29 +6,23 @@ import numpy as np
 import torch
 
 from nerfstudio.model_components.losses import DepthLossType, depth_loss, depth_ranking_loss
-from nerfstudio.models.nerfacto import NerfactoModelConfig
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.utils import colormaps
-from nerfstudio.model_components.renderers import SemanticRenderer
 
-from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel
+
+from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel, SemanticNerfactoModelConfig
 
 @dataclass
-class SemanticDepthNerfactoModelConfig(NerfactoModelConfig):
+class SemanticDepthNerfactoModelConfig(SemanticNerfactoModelConfig):
     # Combine configurations of both models
     _target: Type = field(default_factory=lambda: SemanticDepthNerfactoModel)
-    depth_loss_mult: float = 1e-3
+    depth_loss_mult: float = 1
     is_euclidean_depth: bool = False
     depth_sigma: float = 0.01
     should_decay_sigma: bool = False
     starting_depth_sigma: float = 0.2
     sigma_decay_rate: float = 0.99985
     depth_loss_type: DepthLossType = DepthLossType.DS_NERF
-    use_appearance_embedding: bool = True
-    """Whether to use appearance embeddings. Throws error if not included"""
-    average_init_density: float = 1.0
-    semantic_loss_weight: float = 1.0
-    pass_semantic_gradients: bool = False
 
 class SemanticDepthNerfactoModel(SemanticNerfactoModel):
     config: SemanticDepthNerfactoModelConfig
@@ -80,9 +74,10 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
 
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = super().get_loss_dict(outputs, batch, metrics_dict)  # Get semantic losses
-        assert "semantics_loss" in loss_dict, "No semantic loss in loss_dict!"
         # Add depth-related losses if depth images are in the batch
-        if self.training and "depth_image" in batch:
+        assert "depth_image" in batch, "No depth images in the batch!"
+        # if self.training and "depth_image" in batch:
+        if self.training:
             assert metrics_dict is not None and ("depth_loss" in metrics_dict or "depth_ranking" in metrics_dict)
             if "depth_loss" in metrics_dict:
                 loss_dict["depth_loss"] = self.config.depth_loss_mult * metrics_dict["depth_loss"]
@@ -99,7 +94,6 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
     ) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
         
         metrics, images = super().get_image_metrics_and_images(outputs, batch)
-        assert "semantics_colormap" in images, "No semantics_colormap in images dict!"
         
         """Appends ground truth depth to the depth image."""
         ground_truth_depth = batch["depth_image"].to(self.device)

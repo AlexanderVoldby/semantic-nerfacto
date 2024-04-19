@@ -45,9 +45,13 @@ class SemanticDepthDataset(InputDataset):
         # TODO if depth images already exist from LiDAR, extend them with pretrained model
         self.depth_filenames = self.metadata.get("depth_filenames")
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
-        # if not self.depth_filenames:
-        # Currently always generate depth as LiDAR depth is sparse
-        self._generate_depth_images(dataparser_outputs)
+        if self.metadata["use_monocular_depth"]:
+
+            CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
+            losses.FORCE_PSEUDODEPTH_LOSS = True
+            CONSOLE.print("[bold red] Using psueodepth: forcing depth loss to be ranking loss.")
+
+            self._generate_depth_images(dataparser_outputs)
 
     def _load_lidar_depths(self):
         lidar_depths = []

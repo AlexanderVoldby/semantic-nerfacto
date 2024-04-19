@@ -25,29 +25,20 @@ import numpy as np
 import torch
 from torch.nn import Parameter
 
-from nerfstudio.cameras.camera_optimizers import CameraOptimizer, CameraOptimizerConfig
+
 from nerfstudio.cameras.rays import RayBundle, RaySamples
-from nerfstudio.engine.callbacks import TrainingCallback, TrainingCallbackAttributes, TrainingCallbackLocation
 from nerfstudio.field_components.field_heads import FieldHeadNames
 from nerfstudio.field_components.spatial_distortions import SceneContraction
-from nerfstudio.fields.density_fields import HashMLPDensityField
+
 from nerfstudio.fields.nerfacto_field import NerfactoField
 from nerfstudio.model_components.losses import (
-    MSELoss,
     distortion_loss,
-    interlevel_loss,
-    orientation_loss,
-    pred_normal_loss,
     scale_gradients_by_distance_squared,
 )
 from nerfstudio.data.dataparsers.base_dataparser import Semantics
-from nerfstudio.model_components.ray_samplers import ProposalNetworkSampler, UniformSampler
-from nerfstudio.model_components.renderers import AccumulationRenderer, DepthRenderer, NormalsRenderer, RGBRenderer, SemanticRenderer
-from nerfstudio.model_components.scene_colliders import NearFarCollider
-from nerfstudio.model_components.shaders import NormalsShader
-from nerfstudio.models.base_model import Model
+from nerfstudio.model_components.renderers import SemanticRenderer
 from nerfstudio.models.nerfacto import NerfactoModel, NerfactoModelConfig
-from nerfstudio.utils import colormaps
+
 
 
 @dataclass
@@ -61,7 +52,7 @@ class SemanticNerfactoModelConfig(NerfactoModelConfig):
     """Whether to use appearance embeddings. Throws error if not included"""
     average_init_density: float = 1.0
     # Lower semantic weight since it might dominate
-    semantic_loss_weight: float = 1e-3
+    semantic_loss_weight: float = 1e-6
     pass_semantic_gradients: bool = False
 
 
@@ -111,8 +102,7 @@ class SemanticNerfactoModel(NerfactoModel):
             # Add semantics to field
             use_semantics=True,
             pass_semantic_gradients=self.config.pass_semantic_gradients,
-            # TODO: Find out how to set number of classes, default is 100
-            # Hardcoded 134 classes = Detectron default
+
             num_semantic_classes=len(self.semantics.classes)
         )
 

@@ -36,6 +36,8 @@ class SemanticDataParserConfig(NerfstudioDataParserConfig):
     """target class to instantiate"""
     include_semantics: bool = True
     """whether or not to include loading of semantics data"""
+    use_monocular_depth: bool = False
+    """Whether to extend depth LiDAR images with monocular depth model"""
 
 
 @dataclass
@@ -299,6 +301,7 @@ class SemanticNerf(Nerfstudio):
 
         # reinitialize metadata for dataparser_outputs
         metadata = {}
+        metadata["use_monocular_depth"] = self.config.use_monocular_depth
 
         # _generate_dataparser_outputs might be called more than once so we check if we already loaded the point cloud
         try:
