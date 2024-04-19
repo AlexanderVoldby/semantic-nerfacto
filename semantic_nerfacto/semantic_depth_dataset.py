@@ -2,6 +2,8 @@ from typing import Dict, Union
 import numpy as np
 import torch
 import json
+import os
+import gc
 import torch.nn.functional as F
 from tqdm import tqdm
 from scipy.stats import linregress
@@ -67,7 +69,7 @@ class SemanticDepthDataset(InputDataset):
             print("No depth data found! Generating pseudodepth...")
             depth_tensors = []
             # Change to small to speed up otherwise use depth-anything-base
-            repo = "LiheYoung/depth-anything-small-hf"
+            repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
             
@@ -98,13 +100,19 @@ class SemanticDepthDataset(InputDataset):
                 print("No LiDAR depth data available for scaling and shifting.")
                 
             np.save(cache, self.depths)
+            # Free up memory to prevent GPU from running out of memory
+            del depth_tensors, depths
+            torch.cuda.empty_cache()
+            gc.collect()
             self.depth_filenames = None
             
         # Save filename and index to later retrieve correspondng depth image from dataset since dataparser_outputs removes some depth images
         itd = {i: str(image_filename) for i, image_filename in enumerate(dataparser_outputs.image_filenames)}
         data_dir = str(dataparser_outputs.image_filenames[0].parent.parent)
-        with open(data_dir + "/index_to_depth.json", "w") as outfile: 
-            json.dump(itd, outfile)
+        json_name = data_dir + "/index_to_depth.json"
+        if not os.path.exists(json_name):
+            with open(json_name, "w") as outfile: 
+                json.dump(itd, outfile)
 
     def compute_scale_shift(self, monocular_depths, lidar_depths):
         valid_mask = lidar_depths > 0  # Assuming zero where no LiDAR data
