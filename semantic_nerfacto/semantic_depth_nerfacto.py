@@ -16,7 +16,7 @@ from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel, SemanticN
 class SemanticDepthNerfactoModelConfig(SemanticNerfactoModelConfig):
     # Combine configurations of both models
     _target: Type = field(default_factory=lambda: SemanticDepthNerfactoModel)
-    depth_loss_mult: float = 1
+    depth_loss_mult: float = 1e-3
     is_euclidean_depth: bool = False
     depth_sigma: float = 0.01
     should_decay_sigma: bool = False
