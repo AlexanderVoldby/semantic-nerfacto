@@ -124,7 +124,7 @@ class SemanticDepthNerfactoPipeline(VanillaPipeline):
 
         # --------------------- 2D losses ---------------------
         # Assume we always want patch sampling
-        activate_patch_sampling = True
+        activate_patch_sampling = self.config.use_regnerf_depth_loss or self.config.use_regnerf_rgb_loss or self.config.use_regnerf_semantics_loss
 
         # TODO: debug why patch sampling decreases model performance
         if activate_patch_sampling:
