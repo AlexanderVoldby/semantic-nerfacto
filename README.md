@@ -19,6 +19,17 @@ Implementing automatic segmentation is a work-in-progress
 semantic-depth-nerfacto also inculdes a depth-prior and patch-based regularization. You can toggle the patch-based regularization by using the flags --use-regnerf-rgb-loss/--use-regnerf-depth-los/--use-regnerf-semantics-loss True/False
 semantic-depth-nerfacto currently requires sparse lidar depth maps. It extends these with a monocular depth model to create dense depth maps.
 
+
+Disable everything (should default to nerfacto):
+
+```
+ns-train semantic-depth-nerfacto --viewer.websocket-host 10.0.0.93 --viewer.websocket-port 8888 --pipeline.use-regnerf-depth-loss False --pipeline.use-regnerf-rgb-loss False --pipeline.use-regnerf-semantics-loss False --pipeline.model.use-semantics False --pipeline.model.use-depth False --data data/process-data/USZ-internal-med-L14/
+```
+
+TODO: (rename semantic_depth_nerfacto to teton_nerfacto and implement semantics, depth, reglosses as flags).
+
+
+
 ## Process-data
 
 TODO: add scripts to download from google drive

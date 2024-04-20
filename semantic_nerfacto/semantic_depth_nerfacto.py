@@ -25,6 +25,9 @@ class SemanticDepthNerfactoModelConfig(SemanticNerfactoModelConfig):
     sigma_decay_rate: float = 0.99985
     depth_loss_type: DepthLossType = DepthLossType.DS_NERF
 
+    use_depth: bool = True
+    """Whether to use depth supervision"""
+
 class SemanticDepthNerfactoModel(SemanticNerfactoModel):
     config: SemanticDepthNerfactoModelConfig
 
@@ -47,7 +50,7 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
         metrics_dict = super().get_metrics_dict(outputs, batch)  # Get semantic metrics
         
         # Add depth-related metrics if depth images are in the batch
-        if self.training:
+        if self.training and self.config.use_depth:
             if (
                 losses.FORCE_PSEUDODEPTH_LOSS
                 and self.config.depth_loss_type not in losses.PSEUDODEPTH_COMPATIBLE_LOSSES
@@ -83,7 +86,7 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = super().get_loss_dict(outputs, batch, metrics_dict)  # Get semantic losses
 
-        if self.training:
+        if self.training and self.config.use_depth:
             assert metrics_dict is not None and ("depth_loss" in metrics_dict or "depth_ranking" in metrics_dict)
             if "depth_ranking" in metrics_dict:
                 loss_dict["depth_ranking"] = (
@@ -93,6 +96,7 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
                 )
             if "depth_loss" in metrics_dict:
                 loss_dict["depth_loss"] = self.config.depth_loss_mult * metrics_dict["depth_loss"]
+
         return loss_dict
     
     def get_image_metrics_and_images(
