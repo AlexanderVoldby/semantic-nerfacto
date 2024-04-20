@@ -10,7 +10,7 @@ Then  in the console run "pip install -e ." to install the method.
 The two methods are called semantic-nerfacto and semantic-depth-nerfacto. To train either simply use the standard Nerfstudio CLI, ns-train <method>.
 
 ```
-ns-train semantic-depth-nerfacto --data data/process-data/USZ-internal-med-L14/
+ns-train semantic-depth-nerfacto --data data/process-data/USZ-internal-med-L14/ 
 ```
 
 semantic-nerfacto is a simple nerfacto-extension that includes semantic segmentation. It currently requires that you have added semantic segmentation to your dataset before training.
@@ -27,9 +27,14 @@ TODO: edit such that we also compute semantic segmentations and depth + format t
 
 
 ```
-ns-process-data polycam --data data/zip/USZ-internal-med-L14.zip --output-dir data/process-data/USZ-internal-med-L14
+ns-process-data polycam --use-depth --data data/zip/USZ-internal-med-L14.zip --output-dir data/process-data/USZ-internal-med-L14
 ```
 
 ```
 python semantic_nerfacto/detectron.py --data data/process-data/USZ-internal-med-L14
 ```
+
+
+[] TODO: make a new ns-process-data teton entry that is basically the same as the nerfstudio/nerfstudio/scripts/process_data.py [ProcessPolycam] but also processes the confidence maps
+
+[] TODO: put everything important in a single model class called TetonNerf something, and make everything a configurable flag. It is kinda confusion with nerf-depth, nerf-depth-seg, nerf-seg... 

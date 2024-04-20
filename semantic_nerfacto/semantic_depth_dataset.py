@@ -57,7 +57,7 @@ class SemanticDepthDataset(InputDataset):
         lidar_depths = []
         for depth_filename in self.depth_filenames:
             with Image.open(depth_filename) as img:
-                depth_array = np.array(img)
+                depth_array = np.array(img).astype(np.float32)
                 depth_tensor = torch.from_numpy(depth_array).float()
                 lidar_depths.append(depth_tensor)
 
@@ -66,6 +66,7 @@ class SemanticDepthDataset(InputDataset):
     def _generate_depth_images(self, dataparser_outputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         cache = dataparser_outputs.image_filenames[0].parent / "depths.npy"
+        
         if cache.exists():
             print("Loading pseudodata depth from cache!")
             depths = torch.from_numpy(np.load(cache)).to(device)
@@ -82,24 +83,91 @@ class SemanticDepthDataset(InputDataset):
                 inputs = image_processor(images=pil_image, return_tensors="pt")
                 with torch.no_grad():
                     outputs = model(**inputs)
-                    predicted_depth = outputs.predicted_depth
+
+                    # depth anything outputs disparity so we need to convert it to depth
+                    # we also standardize the depth to be in the range [0, 1]. These will later be shifted using the LiDAR depth
+                    predicted_depth = 1 / outputs.predicted_depth
+                    predicted_depth = (predicted_depth - predicted_depth.min()) / (predicted_depth.max() - predicted_depth.min())
                     # Hardcode the output size from Polycam
                     upsampled_depth = upsample_depth(predicted_depth, 738, 994)
+
+                    if False:
+                        # save the depth image and image
+                        import mediapy as mp
+                        import cv2
+                        upsampled_depth = (upsampled_depth - upsampled_depth.min()) / (upsampled_depth.max() - upsampled_depth.min())
+                        min_ = torch.where(upsampled_depth == upsampled_depth.min())
+                        max_ = torch.where(upsampled_depth == upsampled_depth.max())
+                        upsampled_depth = (upsampled_depth[..., None].repeat(1, 1, 3) * 255).cpu().numpy().astype(np.uint8)
+                        upsampled_depth = cv2.circle(upsampled_depth, (min_[1].item(), min_[0].item()), 50, (0, 0, 255), -1)
+                        cv2.circle(upsampled_depth, (max_[1].item(), max_[0].item()), 50, (255, 0, 0), -1)
+                        mp.write_image(f"depth.png", upsampled_depth)
+                        mp.write_image(f"image.png", inputs.pixel_values[0].permute(1,2,0).cpu().numpy())
+
+
                 depth_tensors.append(upsampled_depth)
             depths = torch.stack(depth_tensors)
             print(f"Depths shape after generating: {depths.shape}")
-            
-            
+
             # Load LiDAR depth data
             lidar_depths = self._load_lidar_depths()
 
+            # Convert to meters
+            lidar_depths = lidar_depths / 1000.0
+
             if lidar_depths is not None:
                 # Compute scale and shift between monocular and LiDAR depths
-                scale, shift = self.compute_scale_shift(depths.cpu(), lidar_depths)
-                self.depths = scale * depths.cpu() + shift
-                # Use the lidar depth in places where it exists and other wise the monocular depth.
-                valid_mask = lidar_depths > 0
-                self.depths[valid_mask] = lidar_depths[valid_mask]
+                self.depths = []
+                for i in range(len(lidar_depths)):
+                    scale, shift = self.compute_scale_shift(depths[i].cpu(), lidar_depths[i])
+                    scaled_depth = scale * depths[i].cpu() + shift
+
+                    # Use the lidar depth in places where it exists and other wise the monocular depth.
+                    valid_mask = lidar_depths[i] > 0
+                    scaled_depth[valid_mask] = scaled_depth[valid_mask]
+                    self.depths.append(scaled_depth)
+    
+                    if False:
+                        # visualize depth maps before and after scaling
+                        import matplotlib.pyplot as plt
+
+                        # create subfigure with three images (lidar depth, monocular depth, scaled monocular depth).
+                        # include a colorbar for each image.
+
+                        fig, axs = plt.subplots(1, 5, figsize=(25, 5))
+                        axs[0].imshow(lidar_depths[i].cpu())
+                        axs[0].set_title("LiDAR depth")
+                        axs[0].axis("off")
+                        plt.colorbar(axs[0].imshow(lidar_depths[i].cpu()), ax=axs[0])
+
+                        axs[1].imshow(depths[i].cpu())
+                        axs[1].set_title("Monocular depth")
+                        axs[1].axis("off")
+                        plt.colorbar(axs[1].imshow(depths[i].cpu()), ax=axs[1])
+
+                        axs[2].imshow(scaled_depth.cpu())
+                        axs[2].set_title("Scaled monocular depth")
+                        axs[2].axis("off")
+                        plt.colorbar(axs[2].imshow(self.depths[i].cpu()), ax=axs[2])
+
+                        # show valid mask
+                        axs[3].imshow(valid_mask.cpu())
+                        axs[3].set_title("Valid mask")
+                        axs[3].axis("off")
+                        plt.colorbar(axs[3].imshow(valid_mask.cpu()), ax=axs[3])
+
+                        # show image
+                        img = Image.open(dataparser_outputs.image_filenames[i])
+                        axs[4].imshow(img)
+                        axs[4].set_title("Image")
+                        axs[4].axis("off")
+
+                        # save the figure
+                        plt.savefig("alignment.png")
+                        plt.close()
+
+                self.depths = torch.stack(self.depths)
+
             else:
                 print("No LiDAR depth data available for scaling and shifting.")
                 
