@@ -41,6 +41,10 @@ class SemanticDepthDataset(InputDataset):
             CONSOLE.print("[bold yellow] Loading pseudodata depth from cache!")
             self.depths = torch.from_numpy(np.load(cache)).to(device)
         else:
+            # TODO: Invert pseudo-depth image as it outputs disparity
+            # Scale lidar depth so it is in meters instead of millimeters.
+            # Lidar depth should probably be scaled globally but maybe we can do it in the cache
+            # Fit line to each image individually and appy scale and shift.
             CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
             losses.FORCE_PSEUDODEPTH_LOSS = True
             depth_tensors = []

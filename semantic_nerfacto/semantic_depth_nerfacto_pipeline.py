@@ -4,7 +4,7 @@ Pipeline for depth nerfacto. Very similar to vanilla pipeline
 
 import typing
 from dataclasses import dataclass, field
-from typing import Literal, Optional, Type
+from typing import Dict, Optional, List, Literal, Tuple, Type
 from torchtyping import TensorType
 import torch
 
@@ -41,6 +41,35 @@ class SemanticDepthNerfactoPipelineConfig(VanillaPipelineConfig):
     """specifies the datamanager config"""
     model: ModelConfig = SemanticDepthNerfactoModelConfig()
     """specifies the model config"""
+    
+    # patch sampling
+    num_patches: int = 10
+    """Number of patches per batch for training"""
+    patch_resolution: int = 32
+    """Patch resolution, where DiffRF used 48x48 and RegNeRF used 8x8"""
+    focal_range: Tuple[float, float] = (3.0, 3.0)
+    """Range of focal length"""
+    central_rotation_range: Tuple[float, float] = (-180, 180)
+    """Range of central rotation"""
+    vertical_rotation_range: Tuple[float, float] = (-90, 20)
+    """Range of vertical rotation"""
+    jitter_std: float = 0.05
+    """Std of camera direction jitter, so we don't just point the cameras towards the center every time"""
+    center: Tuple[float, float, float] = (0, 0, 0)
+    """Center coordinate of the camera sphere"""
+    aabb_scalar: float = 1.5
+    
+    # Losses
+    use_regnerf_depth_loss: bool = False
+    """Whether to use reqgularization on depth patches"""
+    use_regnerf_rgb_loss: bool = False
+    """Whether to use regularization on RGB patches"""
+    use_regnerf_semantics_loss: bool = False
+    """Whether to use regularization on semantics patches"""
+    regnerf_depth_loss_mult = 1
+    regnerf_rgb_loss_mult = 1
+    regnerf_semantics_loss_mult = 1
+    """Loss multipliers for the regularization. Do i need to finetune these?"""
 
 
 class SemanticDepthNerfactoPipeline(VanillaPipeline):
