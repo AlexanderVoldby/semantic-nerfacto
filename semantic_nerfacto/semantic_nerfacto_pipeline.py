@@ -110,8 +110,6 @@ class SemanticNerfactoPipeline(VanillaPipeline):
             )
             dist.barrier(device_ids=[local_rank])
     
-    # TODO: Add total variation loss as included in Nerfbusters
-    # Requires getting the loss_dict from the model and adding the TV-loss
     
     def apply_regnerf_loss(self, step: int, patches_density: TensorType["num_patches", "res", "res"]):
         pd = patches_density

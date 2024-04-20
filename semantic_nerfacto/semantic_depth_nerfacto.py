@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from nerfstudio.model_components.losses import DepthLossType, depth_loss, depth_ranking_loss
+from nerfstudio.model_components import losses
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.utils import colormaps
 
@@ -16,8 +17,8 @@ from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel, SemanticN
 class SemanticDepthNerfactoModelConfig(SemanticNerfactoModelConfig):
     # Combine configurations of both models
     _target: Type = field(default_factory=lambda: SemanticDepthNerfactoModel)
-    depth_loss_mult: float = 1e-3
-    is_euclidean_depth: bool = False
+    depth_loss_mult: float = 1e-1
+    is_euclidean_depth: bool = True
     depth_sigma: float = 0.01
     should_decay_sigma: bool = False
     starting_depth_sigma: float = 0.2
@@ -27,8 +28,8 @@ class SemanticDepthNerfactoModelConfig(SemanticNerfactoModelConfig):
 class SemanticDepthNerfactoModel(SemanticNerfactoModel):
     config: SemanticDepthNerfactoModelConfig
 
-    def __init__(self, config: SemanticDepthNerfactoModelConfig, metadata: Dict, **kwargs) -> None:
-        super().__init__(config, metadata, **kwargs)
+    def populate_modules(self):
+        super().populate_modules()
         if self.config.should_decay_sigma:
             self.depth_sigma = torch.tensor([self.config.starting_depth_sigma])
         else:
@@ -37,56 +38,61 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
 
     def get_outputs(self, ray_bundle: RayBundle):
         outputs = super().get_outputs(ray_bundle)  # Get semantic outputs
-        assert "semantics" in outputs and "semantics_colormap" in outputs, "No semantics in superclass output!"
         # If depth supervision is applicable, add depth-related outputs
         if ray_bundle.metadata is not None and "directions_norm" in ray_bundle.metadata:
             outputs["directions_norm"] = ray_bundle.metadata["directions_norm"]
-
         return outputs
 
     def get_metrics_dict(self, outputs, batch):
         metrics_dict = super().get_metrics_dict(outputs, batch)  # Get semantic metrics
         
         # Add depth-related metrics if depth images are in the batch
-        if self.training and "depth_image" in batch:
-            depth_image = batch["depth_image"].to(self.device)
+        if self.training:
+            if (
+                losses.FORCE_PSEUDODEPTH_LOSS
+                and self.config.depth_loss_type not in losses.PSEUDODEPTH_COMPATIBLE_LOSSES
+            ):
+                raise ValueError(
+                    f"Forcing pseudodepth loss, but depth loss type ({self.config.depth_loss_type}) must be one of {losses.PSEUDODEPTH_COMPATIBLE_LOSSES}"
+                )
+                
             if self.config.depth_loss_type in (DepthLossType.DS_NERF, DepthLossType.URF):
+                metrics_dict["depth_loss"] = 0.0
                 sigma = self._get_sigma().to(self.device)
-                depth_loss_value = 0
+                termination_depth = batch["depth_image"].to(self.device)
                 for i in range(len(outputs["weights_list"])):
-                    depth_loss_value += depth_loss(
+                    metrics_dict["depth_loss"] += depth_loss(
                         weights=outputs["weights_list"][i],
                         ray_samples=outputs["ray_samples_list"][i],
-                        termination_depth=depth_image,
+                        termination_depth=termination_depth,
                         predicted_depth=outputs["depth"],
                         sigma=sigma,
-                        directions_norm=outputs.get("directions_norm"),
+                        directions_norm=outputs["directions_norm"],
                         is_euclidean=self.config.is_euclidean_depth,
                         depth_loss_type=self.config.depth_loss_type,
-                    )
-                metrics_dict["depth_loss"] = depth_loss_value / len(outputs["weights_list"])
-            elif self.config.depth_loss_type == DepthLossType.SPARSENERF_RANKING:
+                    ) / len(outputs["weights_list"])
+            elif self.config.depth_loss_type in (DepthLossType.SPARSENERF_RANKING,):
                 metrics_dict["depth_ranking"] = depth_ranking_loss(
-                    outputs["expected_depth"], depth_image
+                    outputs["expected_depth"], batch["depth_image"].to(self.device)
                 )
+            else:
+                raise NotImplementedError(f"Unknown depth loss type {self.config.depth_loss_type}")
 
         return metrics_dict
 
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = super().get_loss_dict(outputs, batch, metrics_dict)  # Get semantic losses
-        # Add depth-related losses if depth images are in the batch
-        assert "depth_image" in batch, "No depth images in the batch!"
-        # if self.training and "depth_image" in batch:
+
         if self.training:
             assert metrics_dict is not None and ("depth_loss" in metrics_dict or "depth_ranking" in metrics_dict)
-            if "depth_loss" in metrics_dict:
-                loss_dict["depth_loss"] = self.config.depth_loss_mult * metrics_dict["depth_loss"]
             if "depth_ranking" in metrics_dict:
                 loss_dict["depth_ranking"] = (
                     self.config.depth_loss_mult
-                    * metrics_dict["depth_ranking"]
                     * np.interp(self.step, [0, 2000], [0, 0.2])
+                    * metrics_dict["depth_ranking"]
                 )
+            if "depth_loss" in metrics_dict:
+                loss_dict["depth_loss"] = self.config.depth_loss_mult * metrics_dict["depth_loss"]
         return loss_dict
     
     def get_image_metrics_and_images(
