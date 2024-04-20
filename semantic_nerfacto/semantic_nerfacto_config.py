@@ -19,6 +19,7 @@ from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModelConfig
 from semantic_nerfacto.semantic_dataparser import SemanticDataParserConfig
 from semantic_nerfacto.semantic_nerfacto_datamanager import SemanticNerfactoDataManagerConfig
 from semantic_nerfacto.semantic_nerfacto_pipeline import SemanticNerfactoPipelineConfig
+from semantic_nerfacto.semantic_depth_nerfacto_pipeline import SemanticDepthNerfactoPipelineConfig
 from semantic_nerfacto.semantic_depth_nerfacto import SemanticDepthNerfactoModelConfig
 
 semantic_dataparser = DataParserSpecification(config=SemanticDataParserConfig())
@@ -68,7 +69,7 @@ semantic_depth_nerfacto = MethodSpecification(
         steps_per_save=2000,
         max_num_iterations=30000,
         mixed_precision=True,
-        pipeline=SemanticNerfactoPipelineConfig(
+        pipeline=SemanticDepthNerfactoPipelineConfig(
             datamanager=SemanticNerfactoDataManagerConfig(
                 dataparser=SemanticDataParserConfig(),
                 train_num_rays_per_batch=4096,
