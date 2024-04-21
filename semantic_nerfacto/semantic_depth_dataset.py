@@ -74,8 +74,9 @@ class SemanticDepthDataset(InputDataset):
                     )
                     # Fit the predicted_depth to the LiDAR depth
                     scale, shift = self.compute_scale_shift(prediction, depth_tensor)
+                    depth  = scale * prediction + shift
 
-                depth_tensors.append(prediction)
+                depth_tensors.append(depth)
             self.depths = torch.stack(depth_tensors)
             np.save(cache, self.depths.cpu().numpy())
             self.depth_filenames = None
