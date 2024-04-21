@@ -55,13 +55,24 @@ class SemanticDepthDataset(InputDataset):
             repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
-            for image_filename in track(dataparser_outputs.image_filenames, description="Generating depth images"):
+            for image_filename, depth_filename in track(zip(dataparser_outputs.image_filenames, dataparser_outputs.depth_filenames), description="Generating depth images"):
                 pil_image = Image.open(image_filename)
+                depth_image = Image.open(depth_filename)
+                depth_array = np.array(depth_image)
+                depth_tensor = torch.from_numpy(depth_array).float()
                 inputs = image_processor(images=pil_image, return_tensors="pt")
                 with torch.no_grad():
                     outputs = model(**inputs)
                     predicted_depth = outputs.predicted_depth
-                depth_tensors.append(predicted_depth)
+                    prediction = torch.nn.functional.interpolate(
+                        predicted_depth.unsqueeze(1),
+                        size=pil_image.size[::-1],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
+                    # Fit the predicted_depth to the LiDAR depth
+
+                depth_tensors.append(prediction)
             self.depths = torch.stack(depth_tensors)
             np.save(cache, self.depths.cpu().numpy())
             self.depth_filenames = None
