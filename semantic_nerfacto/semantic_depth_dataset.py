@@ -34,11 +34,11 @@ class SemanticDepthDataset(InputDataset):
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
         # if not self.depth_filenames:
         # Currently always generate depth as LiDAR depth is sparse
-        if len(dataparser_outputs.image_filenames) > 0 and (
-            "depth_filenames" not in dataparser_outputs.metadata.keys()
-            or dataparser_outputs.metadata["depth_filenames"] is None
-        ):
-            self._generate_depth_images(dataparser_outputs)
+        # if len(dataparser_outputs.image_filenames) > 0 and (
+            # "depth_filenames" not in dataparser_outputs.metadata.keys()
+            # or dataparser_outputs.metadata["depth_filenames"] is None
+        # ):
+        self._generate_depth_images(dataparser_outputs)
 
     def _generate_depth_images(self, dataparser_outputs: DataparserOutputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -52,16 +52,16 @@ class SemanticDepthDataset(InputDataset):
             # Lidar depth should probably be scaled globally but maybe we can do it in the cache
             # Fit line to each image individually and appy scale and shift.
             CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
-            losses.FORCE_PSEUDODEPTH_LOSS = True
+            # losses.FORCE_PSEUDODEPTH_LOSS = True
             depth_tensors = []
             repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
-            for image_filename, depth_filename in track(zip(dataparser_outputs.image_filenames, dataparser_outputs.depth_filenames), description="Generating depth images"):
+            for image_filename, depth_filename in track(zip(dataparser_outputs.image_filenames, self.depth_filenames), description="Generating depth images"):
                 pil_image = Image.open(image_filename)
                 depth_image = Image.open(depth_filename)
                 depth_array = np.array(depth_image)
-                depth_tensor = torch.from_numpy(depth_array).float()
+                depth_tensor = torch.from_numpy(depth_array).float() * 1e-3 # Divide by 1000 to scale to meters
                 inputs = image_processor(images=pil_image, return_tensors="pt")
                 with torch.no_grad():
                     outputs = model(**inputs)
@@ -72,6 +72,7 @@ class SemanticDepthDataset(InputDataset):
                         mode="bicubic",
                         align_corners=False,
                     )
+                    prediction = prediction.squeeze()
                     # Fit the predicted_depth to the LiDAR depth
                     scale, shift = self.compute_scale_shift(prediction, depth_tensor)
                     depth  = scale * prediction + shift
