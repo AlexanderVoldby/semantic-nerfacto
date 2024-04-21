@@ -6,15 +6,13 @@ import numpy as np
 import torch
 
 from nerfstudio.model_components.losses import DepthLossType, depth_loss, depth_ranking_loss
-from nerfstudio.models.nerfacto import NerfactoModelConfig
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.utils import colormaps
-from nerfstudio.model_components.renderers import SemanticRenderer
 
-from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel
+from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel, SemanticNerfactoModelConfig
 
 @dataclass
-class SemanticDepthNerfactoModelConfig(NerfactoModelConfig):
+class SemanticDepthNerfactoModelConfig(SemanticNerfactoModelConfig):
     # Combine configurations of both models
     _target: Type = field(default_factory=lambda: SemanticDepthNerfactoModel)
     depth_loss_mult: float = 1e-3
@@ -24,11 +22,6 @@ class SemanticDepthNerfactoModelConfig(NerfactoModelConfig):
     starting_depth_sigma: float = 0.2
     sigma_decay_rate: float = 0.99985
     depth_loss_type: DepthLossType = DepthLossType.DS_NERF
-    use_appearance_embedding: bool = True
-    """Whether to use appearance embeddings. Throws error if not included"""
-    average_init_density: float = 1.0
-    semantic_loss_weight: float = 1.0
-    pass_semantic_gradients: bool = False
 
 class SemanticDepthNerfactoModel(SemanticNerfactoModel):
     config: SemanticDepthNerfactoModelConfig

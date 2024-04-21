@@ -32,7 +32,11 @@ class SemanticDepthDataset(InputDataset):
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
         # if not self.depth_filenames:
         # Currently always generate depth as LiDAR depth is sparse
-        self._generate_depth_images(dataparser_outputs)
+        if len(dataparser_outputs.image_filenames) > 0 and (
+            "depth_filenames" not in dataparser_outputs.metadata.keys()
+            or dataparser_outputs.metadata["depth_filenames"] is None
+        ):
+            self._generate_depth_images(dataparser_outputs)
 
     def _generate_depth_images(self, dataparser_outputs: DataparserOutputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
