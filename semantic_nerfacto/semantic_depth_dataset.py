@@ -118,12 +118,12 @@ class SemanticDepthDataset(InputDataset):
             with open(json_name, "w") as outfile: 
                 json.dump(itd, outfile)
 
-    def compute_scale_shift(self, monocular_depths, lidar_depths):
-        valid_mask = lidar_depths > 0  # Assuming zero where no LiDAR data
-        scaled_monocular = monocular_depths[valid_mask].flatten()
-        lidar_depths_flat = lidar_depths[valid_mask].flatten()
+    def compute_scale_shift(self, monocular_depth, lidar_depth):
+        valid_mask = lidar_depth > 0  # Assuming zero where no LiDAR data
+        scaled_monocular = monocular_depth[valid_mask].flatten()
+        lidar_depth_flat = lidar_depth[valid_mask].flatten()
 
-        slope, intercept, r_value, p_value, std_err = linregress(scaled_monocular.numpy(), lidar_depths_flat.numpy())
+        slope, intercept, r_value, p_value, std_err = linregress(scaled_monocular.numpy(), lidar_depth_flat.numpy())
         return slope, intercept
 
     def get_metadata(self, data: Dict) -> Dict:
