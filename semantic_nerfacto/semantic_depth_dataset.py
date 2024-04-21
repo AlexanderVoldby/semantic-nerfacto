@@ -4,8 +4,10 @@ import numpy as np
 import torch
 from PIL import Image
 from pathlib import Path
+
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 from rich.progress import track
+from scipy.stats import linregress
 
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs, Semantics
 from nerfstudio.data.datasets.base_dataset import InputDataset
@@ -71,11 +73,20 @@ class SemanticDepthDataset(InputDataset):
                         align_corners=False,
                     )
                     # Fit the predicted_depth to the LiDAR depth
+                    scale, shift = self.compute_scale_shift(prediction, depth_tensor)
 
                 depth_tensors.append(prediction)
             self.depths = torch.stack(depth_tensors)
             np.save(cache, self.depths.cpu().numpy())
             self.depth_filenames = None
+
+    def compute_scale_shift(self, monocular_depth, lidar_depth):
+        valid_mask = lidar_depth > 0  # Assuming zero where no LiDAR data
+        scaled_monocular = monocular_depth[valid_mask].flatten()
+        lidar_depth_flat = lidar_depth[valid_mask].flatten()
+
+        slope, intercept, r_value, p_value, std_err = linregress(scaled_monocular.numpy(), lidar_depth_flat.numpy())
+        return slope, intercept
 
     def get_metadata(self, data: Dict) -> Dict:
         
