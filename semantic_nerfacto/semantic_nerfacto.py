@@ -25,29 +25,20 @@ import numpy as np
 import torch
 from torch.nn import Parameter
 
-from nerfstudio.cameras.camera_optimizers import CameraOptimizer, CameraOptimizerConfig
+
 from nerfstudio.cameras.rays import RayBundle, RaySamples
-from nerfstudio.engine.callbacks import TrainingCallback, TrainingCallbackAttributes, TrainingCallbackLocation
 from nerfstudio.field_components.field_heads import FieldHeadNames
 from nerfstudio.field_components.spatial_distortions import SceneContraction
-from nerfstudio.fields.density_fields import HashMLPDensityField
+
 from nerfstudio.fields.nerfacto_field import NerfactoField
 from nerfstudio.model_components.losses import (
-    MSELoss,
     distortion_loss,
-    interlevel_loss,
-    orientation_loss,
-    pred_normal_loss,
     scale_gradients_by_distance_squared,
 )
 from nerfstudio.data.dataparsers.base_dataparser import Semantics
-from nerfstudio.model_components.ray_samplers import ProposalNetworkSampler, UniformSampler
-from nerfstudio.model_components.renderers import AccumulationRenderer, DepthRenderer, NormalsRenderer, RGBRenderer, SemanticRenderer
-from nerfstudio.model_components.scene_colliders import NearFarCollider
-from nerfstudio.model_components.shaders import NormalsShader
-from nerfstudio.models.base_model import Model
+from nerfstudio.model_components.renderers import SemanticRenderer
 from nerfstudio.models.nerfacto import NerfactoModel, NerfactoModelConfig
-from nerfstudio.utils import colormaps
+
 
 
 @dataclass
@@ -59,6 +50,7 @@ class SemanticNerfactoModelConfig(NerfactoModelConfig):
     """Whether to use transient embedding."""
     use_appearance_embedding: bool = True
     """Whether to use appearance embeddings. Throws error if not included"""
+    use_semantics: bool = True
     semantic_loss_weight: float = 1.0
     pass_semantic_gradients: bool = False
     use_semantics: bool = True
@@ -90,7 +82,6 @@ class SemanticNerfactoModel(NerfactoModel):
             scene_contraction = SceneContraction(order=float("inf"))
 
         appearance_embedding_dim = self.config.appearance_embed_dim if self.config.use_appearance_embedding else 0
-
         if self.semantics is not None:
             num_classes = len(self.semantics.classes)
         else: num_classes = 0
@@ -131,7 +122,6 @@ class SemanticNerfactoModel(NerfactoModel):
 
     def get_outputs(self, ray_bundle: RayBundle):
         outputs = super().get_outputs(ray_bundle)  # Get nerfacto outputs
-        
         if self.training:
             self.camera_optimizer.apply_to_raybundle(ray_bundle)
         ray_samples: RaySamples
@@ -145,13 +135,13 @@ class SemanticNerfactoModel(NerfactoModel):
         ray_samples_list.append(ray_samples)
         
         # Add semantics to output
-        if self.config.use_semantics:
+        if self.config.use_semantics: 
             semantic_weights = weights
             if not self.config.pass_semantic_gradients:
                 semantic_weights = semantic_weights.detach()
             outputs["semantics"] = self.renderer_semantics(
                 field_outputs[FieldHeadNames.SEMANTICS], weights=semantic_weights)
-            
+        
             # semantics colormaps
             semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
             outputs["semantics_colormap"] = self.colormap.to(self.device)[semantic_labels]
@@ -172,7 +162,6 @@ class SemanticNerfactoModel(NerfactoModel):
         return metrics_dict
 
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
-        
         loss_dict = super().get_loss_dict(outputs, batch, metrics_dict)
         
         # semantic loss
@@ -180,8 +169,6 @@ class SemanticNerfactoModel(NerfactoModel):
             loss_dict["semantics_loss"] = self.config.semantic_loss_weight * self.cross_entropy_loss(
                 outputs["semantics"], batch["semantics"][..., 0].long().to(self.device))
 
-        # Add loss from camera optimizer
-        self.camera_optimizer.get_loss_dict(loss_dict)
         return loss_dict
 
     def get_image_metrics_and_images(

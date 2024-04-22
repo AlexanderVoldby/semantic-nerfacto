@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Optional, Tuple, Type
+import os
+import glob
+import shutil
 
 import numpy as np
 import torch
@@ -57,6 +60,7 @@ class SemanticNerf(Nerfstudio):
         image_filenames = []
         mask_filenames = []
         depth_filenames = []
+        confidence_filenames = []
         poses = []
 
         fx_fixed = "fl_x" in meta
@@ -139,7 +143,13 @@ class SemanticNerf(Nerfstudio):
                 depth_filepath = Path(frame["depth_file_path"])
                 depth_fname = self._get_fname(depth_filepath, data_dir, downsample_folder_prefix="depths_")
                 depth_filenames.append(depth_fname)
-
+            
+        if len(depth_filenames) == len(image_filenames):
+            confidence_filenames = self.rename_and_move_confidence_files(data_dir, depth_filenames)
+        print(f"length confidence: {len(confidence_filenames)}")
+        print(confidence_filenames)
+        print(f"length depth: {len(depth_filenames)}")
+            
         assert len(mask_filenames) == 0 or (len(mask_filenames) == len(image_filenames)), """
         Different number of image and mask filenames.
         You should check that mask_path is specified for every frame (or zero frames) in transforms.json.
@@ -210,6 +220,7 @@ class SemanticNerf(Nerfstudio):
         image_filenames = [image_filenames[i] for i in indices]
         mask_filenames = [mask_filenames[i] for i in indices] if len(mask_filenames) > 0 else []
         depth_filenames = [depth_filenames[i] for i in indices] if len(depth_filenames) > 0 else []
+        confidence_filenames = [confidence_filenames[i] for i in indices] if len(confidence_filenames) > 0 else []
 
         idx_tensor = torch.tensor(indices, dtype=torch.long)
         poses = poses[idx_tensor]
@@ -393,13 +404,78 @@ class SemanticNerf(Nerfstudio):
             metadata={
                 "depth_filenames": depth_filenames if len(depth_filenames) > 0 else None,
                 "depth_unit_scale_factor": self.config.depth_unit_scale_factor,
-                # Not sure whether we need to include semantic masks at some point
-                # "mask_color": self.config.mask_color, 
+                "confidence_filenames": confidence_filenames if len(confidence_filenames) > 0 else None,
                 "semantics": semantics,
                 **metadata,
             },
         )
         
         
-        return dataparser_outputs 
+        return dataparser_outputs
+    
+    def get_depth_confidence_masks(self, data):
+        # Find the directory ending with 'poly'
+        poly_folders = [f for f in glob.glob(os.path.join(data, '*poly')) if os.path.isdir(f)]
         
+        # Check if we found exactly one 'poly' folder
+        if len(poly_folders) != 1:
+            raise ValueError("Expected exactly one folder ending in 'poly', found {}: {}".format(len(poly_folders), poly_folders))
+        
+
+        poly_folder = poly_folders[0]
+        confidence_folder = os.path.join(poly_folder, 'confidence')
+        
+        # Check if the 'confidence' folder exists
+        if not os.path.exists(confidence_folder):
+            raise FileNotFoundError(f"The 'confidence' folder does not exist in {poly_folder}")
+        
+        files = os.listdir(confidence_folder)
+
+        return files
+
+    def rename_and_move_confidence_files(self, data, depth_filenames):
+        
+        # Find the directory ending with 'poly'
+        poly_folders = [f for f in os.listdir(data) if f.endswith('poly') and os.path.isdir(os.path.join(data, f))]
+        
+        # Check if we found exactly one 'poly' folder
+        if len(poly_folders) != 1:
+            raise ValueError("Expected exactly one folder ending in 'poly', found {}: {}".format(len(poly_folders), poly_folders))
+        
+        poly_folder = poly_folders[0]
+        confidence_folder_path = os.path.join(data, poly_folder, 'confidence')
+        
+        # Verify the 'confidence' folder exists
+        if not os.path.exists(confidence_folder_path):
+            raise FileNotFoundError(f"The 'confidence' folder does not exist in {poly_folder}")
+        
+        # Get all confidence files
+        confidence_files = os.listdir(confidence_folder_path)
+        assert len(confidence_files) == len(depth_filenames), "Number of confidence masks does not match number of depth images"
+
+        # Process each file in the confidence folder
+        for confidence, depth in zip (confidence_files, depth_filenames):
+            # Assuming the filename structure is 'frame_<number>.png'
+            depth = os.path.basename(depth)
+            
+            if depth.startswith('frame_') and depth.endswith('.png'):
+                frame_number = depth.split('_')[1].split('.')[0]
+                new_confidence = f'confidence_{frame_number}.png'
+                new_file_path = os.path.join(data, 'confidence', new_confidence)
+
+                # Make sure the target directory exists, if not, create it
+                target_dir = os.path.dirname(new_file_path)
+                if not os.path.exists(target_dir):
+                    os.makedirs(target_dir)
+
+                # Full path of the current file
+                current_file_path = os.path.join(confidence_folder_path, confidence)
+
+                # Move and rename the file
+                shutil.move(current_file_path, new_file_path)
+        
+        new_dir = os.path.join(data, 'confidence')
+        confidences = [os.path.join(new_dir, filename) for filename in os.listdir(new_dir)]
+        return confidences
+
+            

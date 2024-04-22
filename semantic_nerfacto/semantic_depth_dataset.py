@@ -57,12 +57,7 @@ class SemanticDepthDataset(InputDataset):
             print("Loading pseudodata depth from cache!")
             self.depths = torch.from_numpy(np.load(cache)).to(device)
         else:
-            # TODO: Invert pseudo-depth image as it outputs disparity
-            # Scale lidar depth so it is in meters instead of millimeters.
-            # Lidar depth should probably be scaled globally but maybe we can do it in the cache
-            # Fit line to each image individually and appy scale and shift.
             CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
-            # losses.FORCE_PSEUDODEPTH_LOSS = True
             depth_tensors = []
             # Change to small to speed up otherwise use depth-anything-base
             repo = "LiheYoung/depth-anything-base-hf"
@@ -92,7 +87,7 @@ class SemanticDepthDataset(InputDataset):
                     # Save every 20th image
                     if i % 20 == 0:
                         name = os.path.basename(image_filename)
-                        folder = str(image_filename.parent.parent)
+                        folder = str(image_filename.parent.parent) + "/visualizations"
                         saved_name = folder + "/" + name
                         
                         try:
@@ -153,6 +148,7 @@ class SemanticDepthDataset(InputDataset):
             filepath = self.depth_filenames[image_idx]
             height = int(self._dataparser_outputs.cameras.height[image_idx])
             width = int(self._dataparser_outputs.cameras.width[image_idx])
+            # LiDAR is scaled by 1e-3 if it already exists
             scale_factor = self.depth_unit_scale_factor * self.scale_factor
             depth_image = get_depth_image_from_path(
                 filepath=filepath, height=height, width=width, scale_factor=scale_factor
