@@ -1,7 +1,12 @@
 from typing import Dict, Union
-import json
 import numpy as np
 import torch
+import json
+import os
+import gc
+import torch.nn.functional as F
+from tqdm import tqdm
+from scipy.stats import linregress
 from PIL import Image
 from pathlib import Path
 from tqdm import tqdm
@@ -9,20 +14,20 @@ from tqdm import tqdm
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 from scipy.stats import linregress
 
-from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs, Semantics
+from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs
 from nerfstudio.data.datasets.base_dataset import InputDataset
 from nerfstudio.data.utils.data_utils import get_semantics_and_mask_tensors_from_path, get_depth_image_from_path
 from nerfstudio.model_components import losses
-from nerfstudio.utils.misc import torch_compile
 from nerfstudio.utils.rich_utils import CONSOLE
 
+from semantic_nerfacto.visualizations import compare_depth_and_image, visualize_depth_before_and_after_scaling
 
 class SemanticDepthDataset(InputDataset):
     exclude_batch_keys_from_device = InputDataset.exclude_batch_keys_from_device + ["mask", "semantics", "depth_image"]
 
     def __init__(self, dataparser_outputs: DataparserOutputs, scale_factor: float = 1.0, use_monocular_depth= True):
         super().__init__(dataparser_outputs, scale_factor)
-        assert "semantics" in dataparser_outputs.metadata.keys() and isinstance(self.metadata["semantics"], Semantics)
+        # assert "semantics" in dataparser_outputs.metadata.keys() and isinstance(self.metadata["semantics"], Semantics)
         self.semantics = self.metadata["semantics"]
         self.mask_indices = torch.tensor(
             [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
@@ -43,11 +48,13 @@ class SemanticDepthDataset(InputDataset):
         if self.use_monocular_depth:
             self._generate_depth_images(dataparser_outputs)
 
-    def _generate_depth_images(self, dataparser_outputs: DataparserOutputs):
+
+    def _generate_depth_images(self, dataparser_outputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         cache = dataparser_outputs.image_filenames[0].parent / "depths.npy"
+        
         if cache.exists():
-            CONSOLE.print("[bold yellow] Loading pseudodata depth from cache!")
+            print("Loading pseudodata depth from cache!")
             self.depths = torch.from_numpy(np.load(cache)).to(device)
         else:
             # TODO: Invert pseudo-depth image as it outputs disparity
@@ -57,10 +64,11 @@ class SemanticDepthDataset(InputDataset):
             CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
             # losses.FORCE_PSEUDODEPTH_LOSS = True
             depth_tensors = []
+            # Change to small to speed up otherwise use depth-anything-base
             repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
-            for image_filename, depth_filename in tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames), desc="Generating depth images"):
+            for i, (image_filename, depth_filename) in enumerate(tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames), desc="Generating depth images")):
                 pil_image = Image.open(image_filename)
                 depth_image = Image.open(depth_filename)
                 depth_array = np.array(depth_image)
@@ -68,7 +76,8 @@ class SemanticDepthDataset(InputDataset):
                 inputs = image_processor(images=pil_image, return_tensors="pt")
                 with torch.no_grad():
                     outputs = model(**inputs)
-                    predicted_depth = outputs.predicted_depth
+                    predicted_depth = 1 / outputs.predicted_depth
+                    predicted_depth = (predicted_depth - predicted_depth.min()) / (predicted_depth.max() - predicted_depth.min())
                     prediction = torch.nn.functional.interpolate(
                         predicted_depth.unsqueeze(1),
                         size=pil_image.size[::-1],
@@ -79,11 +88,44 @@ class SemanticDepthDataset(InputDataset):
                     # Fit the predicted_depth to the LiDAR depth
                     scale, shift = self.compute_scale_shift(prediction, depth_tensor)
                     depth  = scale * prediction + shift
+                    
+                    # Save every 20th image
+                    if i % 20 == 0:
+                        name = os.path.basename(image_filename)
+                        folder = str(image_filename.parent.parent)
+                        saved_name = folder + "/" + name
+                        
+                        try:
+                            compare_depth_and_image(inputs, depth, saved_name)
+                            visualize_depth_before_and_after_scaling(
+                                pil_image,
+                                depth_tensor,
+                                prediction,
+                                depth,
+                                saved_name
+                            )
+                            print(f"Saved figures under {name}")
+                        except Exception as e:
+                            print(f"Error saving image: {e}")
 
                 depth_tensors.append(depth)
+                
             self.depths = torch.stack(depth_tensors)
             np.save(cache, self.depths.cpu().numpy())
+
+            # Delete some stuff to avoid exceeding GPU memory
+            del depth_tensors
+            torch.cuda.empty_cache()
+            gc.collect()
             self.depth_filenames = None
+            
+        # Save filename and index to later retrieve correspondng depth image from dataset since dataparser_outputs removes some images due to high blur score
+        itd = {i: str(image_filename) for i, image_filename in enumerate(dataparser_outputs.image_filenames)}
+        data_dir = str(dataparser_outputs.image_filenames[0].parent.parent)
+        json_name = data_dir + "/index_to_depth.json"
+        if not os.path.exists(json_name):
+            with open(json_name, "w") as outfile: 
+                json.dump(itd, outfile)
 
     def compute_scale_shift(self, monocular_depth, lidar_depth):
         valid_mask = lidar_depth > 0  # Assuming zero where no LiDAR data
