@@ -451,7 +451,6 @@ class SemanticNerf(Nerfstudio):
         
         # Get all confidence files
         confidence_files = os.listdir(confidence_folder_path)
-        assert len(confidence_files) == len(depth_filenames), "Number of confidence masks does not match number of depth images"
 
         # Process each file in the confidence folder
         for confidence, depth in zip (confidence_files, depth_filenames):
