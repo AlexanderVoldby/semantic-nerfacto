@@ -122,14 +122,18 @@ class SemanticDepthDataset(InputDataset):
                         folder = str(image_filename.parent.parent)
                         saved_name = folder + "/" + name
                         
-                        compare_depth_and_image(pil_image, depth, saved_name)
-                        visualize_depth_before_and_after_scaling(
-                            pil_image,
-                            depth_tensor,
-                            prediction,
-                            depth,
-                            saved_name
-                        )
+                        try:
+                            compare_depth_and_image(inputs, depth, saved_name)
+                            visualize_depth_before_and_after_scaling(
+                                pil_image,
+                                depth_tensor,
+                                prediction,
+                                depth,
+                                saved_name
+                            )
+                            print(f"Saved figures under {name}")
+                        except Exception as e:
+                            print(f"Error saving image: {e}")
 
                 depth_tensors.append(depth)
                 
@@ -142,7 +146,7 @@ class SemanticDepthDataset(InputDataset):
             gc.collect()
             self.depth_filenames = None
             
-        # Save filename and index to later retrieve correspondng depth image from dataset since dataparser_outputs removes some depth images
+        # Save filename and index to later retrieve correspondng depth image from dataset since dataparser_outputs removes some images due to high blur score
         itd = {i: str(image_filename) for i, image_filename in enumerate(dataparser_outputs.image_filenames)}
         data_dir = str(dataparser_outputs.image_filenames[0].parent.parent)
         json_name = data_dir + "/index_to_depth.json"
