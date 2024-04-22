@@ -60,21 +60,6 @@ class SemanticDepthDataset(InputDataset):
         if self.use_monocular_depth:
             self._generate_depth_images(dataparser_outputs)
 
-            CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
-            losses.FORCE_PSEUDODEPTH_LOSS = True
-            CONSOLE.print("[bold red] Using psueodepth: forcing depth loss to be ranking loss.")
-
-            self._generate_depth_images(dataparser_outputs)
-
-    def _load_lidar_depths(self):
-        lidar_depths = []
-        for depth_filename in self.depth_filenames:
-            with Image.open(depth_filename) as img:
-                depth_array = np.array(img).astype(np.float32)
-                depth_tensor = torch.from_numpy(depth_array).float()
-                lidar_depths.append(depth_tensor)
-
-        return torch.stack(lidar_depths) if lidar_depths else None
 
     def _generate_depth_images(self, dataparser_outputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -82,7 +67,7 @@ class SemanticDepthDataset(InputDataset):
         
         if cache.exists():
             print("Loading pseudodata depth from cache!")
-            depths = torch.from_numpy(np.load(cache)).to(device)
+            self.depths = torch.from_numpy(np.load(cache)).to(device)
         else:
             # TODO: Invert pseudo-depth image as it outputs disparity
             # Scale lidar depth so it is in meters instead of millimeters.
