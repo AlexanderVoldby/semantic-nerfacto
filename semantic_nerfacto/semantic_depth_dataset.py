@@ -14,12 +14,14 @@ from tqdm import tqdm
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 from scipy.stats import linregress
 
-from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs, Semantics
+from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs
 from nerfstudio.data.datasets.base_dataset import InputDataset
 from nerfstudio.data.utils.data_utils import get_semantics_and_mask_tensors_from_path, get_depth_image_from_path
 from nerfstudio.model_components import losses
-from nerfstudio.utils.misc import torch_compile
 from nerfstudio.utils.rich_utils import CONSOLE
+
+from semantic_nerfacto.visualizations import compare_depth_and_image, visualize_depth_before_and_after_scaling
+
 
 def upsample_depth(depth_tensor, target_height, target_width):
     # Helper function to upsaple monocular depth to the same size as liDAR depth
@@ -68,7 +70,7 @@ class SemanticDepthDataset(InputDataset):
         lidar_depths = []
         for depth_filename in self.depth_filenames:
             with Image.open(depth_filename) as img:
-                depth_array = np.array(img)
+                depth_array = np.array(img).astype(np.float32)
                 depth_tensor = torch.from_numpy(depth_array).float()
                 lidar_depths.append(depth_tensor)
 
@@ -77,6 +79,7 @@ class SemanticDepthDataset(InputDataset):
     def _generate_depth_images(self, dataparser_outputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         cache = dataparser_outputs.image_filenames[0].parent / "depths.npy"
+        
         if cache.exists():
             print("Loading pseudodata depth from cache!")
             depths = torch.from_numpy(np.load(cache)).to(device)
@@ -92,7 +95,7 @@ class SemanticDepthDataset(InputDataset):
             repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
-            for image_filename, depth_filename in tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames), desc="Generating depth images"):
+            for i, (image_filename, depth_filename) in enumerate(tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames), desc="Generating depth images")):
                 pil_image = Image.open(image_filename)
                 depth_image = Image.open(depth_filename)
                 depth_array = np.array(depth_image)
@@ -100,7 +103,8 @@ class SemanticDepthDataset(InputDataset):
                 inputs = image_processor(images=pil_image, return_tensors="pt")
                 with torch.no_grad():
                     outputs = model(**inputs)
-                    predicted_depth = outputs.predicted_depth
+                    predicted_depth = 1 / outputs.predicted_depth
+                    predicted_depth = (predicted_depth - predicted_depth.min()) / (predicted_depth.max() - predicted_depth.min())
                     prediction = torch.nn.functional.interpolate(
                         predicted_depth.unsqueeze(1),
                         size=pil_image.size[::-1],
@@ -111,10 +115,31 @@ class SemanticDepthDataset(InputDataset):
                     # Fit the predicted_depth to the LiDAR depth
                     scale, shift = self.compute_scale_shift(prediction, depth_tensor)
                     depth  = scale * prediction + shift
+                    
+                    # Save every 20th image
+                    if i % 20 == 0:
+                        name = os.path.basename(image_filename)
+                        folder = str(image_filename.parent.parent)
+                        saved_name = folder + "/" + name
+                        
+                        compare_depth_and_image(pil_image, depth, saved_name)
+                        visualize_depth_before_and_after_scaling(
+                            pil_image,
+                            depth_tensor,
+                            prediction,
+                            depth,
+                            saved_name
+                        )
 
                 depth_tensors.append(depth)
+                
             self.depths = torch.stack(depth_tensors)
             np.save(cache, self.depths.cpu().numpy())
+
+            # Delete some stuff to avoid exceeding GPU memory
+            del depth_tensors
+            torch.cuda.empty_cache()
+            gc.collect()
             self.depth_filenames = None
             
         # Save filename and index to later retrieve correspondng depth image from dataset since dataparser_outputs removes some depth images
@@ -124,14 +149,6 @@ class SemanticDepthDataset(InputDataset):
         if not os.path.exists(json_name):
             with open(json_name, "w") as outfile: 
                 json.dump(itd, outfile)
-
-    def compute_scale_shift(self, monocular_depth, lidar_depth):
-        valid_mask = lidar_depth > 0  # Assuming zero where no LiDAR data
-        scaled_monocular = monocular_depth[valid_mask].flatten()
-        lidar_depth_flat = lidar_depth[valid_mask].flatten()
-
-        slope, intercept, r_value, p_value, std_err = linregress(scaled_monocular.numpy(), lidar_depth_flat.numpy())
-        return slope, intercept
 
     def compute_scale_shift(self, monocular_depth, lidar_depth):
         valid_mask = lidar_depth > 0  # Assuming zero where no LiDAR data
