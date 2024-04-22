@@ -6,10 +6,9 @@ import numpy as np
 import torch
 
 from nerfstudio.model_components.losses import DepthLossType, depth_loss, depth_ranking_loss
-from nerfstudio.model_components import losses
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.utils import colormaps
-
+from nerfstudio.model_components import losses
 
 from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel, SemanticNerfactoModelConfig
 
