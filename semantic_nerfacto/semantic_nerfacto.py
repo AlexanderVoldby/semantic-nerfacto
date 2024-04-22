@@ -53,6 +53,7 @@ class SemanticNerfactoModelConfig(NerfactoModelConfig):
     use_semantics: bool = True
     semantic_loss_weight: float = 1.0
     pass_semantic_gradients: bool = False
+    use_semantics: bool = True
 
 
 class SemanticNerfactoModel(NerfactoModel):
@@ -65,11 +66,16 @@ class SemanticNerfactoModel(NerfactoModel):
     config: SemanticNerfactoModelConfig
 
     def __init__(self, config: SemanticNerfactoModelConfig, metadata: Dict, **kwargs) -> None:
-        assert "semantics" in metadata.keys() and isinstance(metadata["semantics"], Semantics)
-        self.semantics = metadata["semantics"]
+        if "semantics" in metadata.keys() and isinstance(metadata["semantics"], Semantics): 
+            self.semantics = metadata["semantics"]
         super().__init__(config=config, **kwargs)
+<<<<<<< HEAD
         self.colormap = self.semantics.colors.clone().detach().to(self.device)
         
+=======
+        if "semantics" in metadata.keys() and isinstance(metadata["semantics"], Semantics):
+            self.colormap = self.semantics.colors.clone().detach().to(self.device)
+>>>>>>> working-version
     
     def populate_modules(self):
         """Set the fields and modules."""
@@ -81,7 +87,11 @@ class SemanticNerfactoModel(NerfactoModel):
             scene_contraction = SceneContraction(order=float("inf"))
 
         appearance_embedding_dim = self.config.appearance_embed_dim if self.config.use_appearance_embedding else 0
+<<<<<<< HEAD
         
+=======
+
+>>>>>>> working-version
         if self.semantics is not None:
             num_classes = len(self.semantics.classes)
         else: num_classes = 0
@@ -135,13 +145,21 @@ class SemanticNerfactoModel(NerfactoModel):
         ray_samples_list.append(ray_samples)
         
         # Add semantics to output
+<<<<<<< HEAD
         if self.config.use_semantics: 
+=======
+        if self.config.use_semantics:
+>>>>>>> working-version
             semantic_weights = weights
             if not self.config.pass_semantic_gradients:
                 semantic_weights = semantic_weights.detach()
             outputs["semantics"] = self.renderer_semantics(
                 field_outputs[FieldHeadNames.SEMANTICS], weights=semantic_weights)
+<<<<<<< HEAD
         
+=======
+            
+>>>>>>> working-version
             # semantics colormaps
             semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
             outputs["semantics_colormap"] = self.colormap.to(self.device)[semantic_labels]
@@ -164,6 +182,10 @@ class SemanticNerfactoModel(NerfactoModel):
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = super().get_loss_dict(outputs, batch, metrics_dict)
         
+<<<<<<< HEAD
+=======
+        # semantic loss
+>>>>>>> working-version
         if self.config.use_semantics:
             loss_dict["semantics_loss"] = self.config.semantic_loss_weight * self.cross_entropy_loss(
                 outputs["semantics"], batch["semantics"][..., 0].long().to(self.device))
@@ -176,12 +198,20 @@ class SemanticNerfactoModel(NerfactoModel):
         
         metrics_dict, images_dict = super().get_image_metrics_and_images(outputs, batch)
         
+<<<<<<< HEAD
         if self.config.use_semantics:
             semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
             images_dict["semantics_colormap"] = self.colormap.to(self.device)[semantic_labels]
 
         # valid mask
         # TODO: Include these if using masks
+=======
+        # semantics
+        if self.config.use_semantics:
+            semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
+            images_dict["semantics_colormap"] = self.colormap.to(self.device)[semantic_labels]
+            
+>>>>>>> working-version
         # images_dict["mask"] = batch["mask"].repeat(1, 1, 3).to(self.device)
-        
+            
         return metrics_dict, images_dict

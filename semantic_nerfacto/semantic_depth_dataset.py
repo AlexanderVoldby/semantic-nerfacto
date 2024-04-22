@@ -21,7 +21,10 @@ from nerfstudio.model_components import losses
 from nerfstudio.utils.rich_utils import CONSOLE
 
 from semantic_nerfacto.visualizations import compare_depth_and_image, visualize_depth_before_and_after_scaling
+<<<<<<< HEAD
 
+=======
+>>>>>>> working-version
 
 class SemanticDepthDataset(InputDataset):
     exclude_batch_keys_from_device = InputDataset.exclude_batch_keys_from_device + ["mask", "semantics", "depth_image"]
@@ -65,8 +68,11 @@ class SemanticDepthDataset(InputDataset):
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
             for i, (image_filename, depth_filename) in enumerate(tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames), desc="Generating depth images")):
+<<<<<<< HEAD
                 print(image_filename)
                 print(depth_filename)
+=======
+>>>>>>> working-version
                 pil_image = Image.open(image_filename)
                 depth_image = Image.open(depth_filename)
                 depth_array = np.array(depth_image)
@@ -90,7 +96,11 @@ class SemanticDepthDataset(InputDataset):
                     # Save every 20th image
                     if i % 20 == 0:
                         name = os.path.basename(image_filename)
+<<<<<<< HEAD
                         folder = str(image_filename.parent.parent) + "/visualizations"
+=======
+                        folder = str(image_filename.parent.parent)
+>>>>>>> working-version
                         saved_name = folder + "/" + name
                         
                         try:

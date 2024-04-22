@@ -373,8 +373,6 @@ class SemanticNerf(Nerfstudio):
             self.prompted_user = True
 
         downscale_suffix = f"_{self.config.downscale_factor}" if self.config.downscale_factor != 1 else ""
-        # images_folder = f"images{downscale_suffix}"
-        # segmentations_folder = f"segmentations{downscale_suffix}"
         images_folder = "images"
         segmentations_folder = "segmentations"
 
@@ -392,7 +390,11 @@ class SemanticNerf(Nerfstudio):
             thing_colors = torch.tensor(panoptic_classes["thing_colors"], dtype=torch.float32) / 255.0
             stuff_colors = torch.tensor(panoptic_classes["stuff_colors"], dtype=torch.float32) / 255.0
             colors = torch.cat((thing_colors, stuff_colors), 0)
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> working-version
             semantics = Semantics(filenames=filenames, classes=classes, colors=colors)
 
 
