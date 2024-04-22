@@ -390,11 +390,7 @@ class SemanticNerf(Nerfstudio):
             thing_colors = torch.tensor(panoptic_classes["thing_colors"], dtype=torch.float32) / 255.0
             stuff_colors = torch.tensor(panoptic_classes["stuff_colors"], dtype=torch.float32) / 255.0
             colors = torch.cat((thing_colors, stuff_colors), 0)
-<<<<<<< HEAD
-
-=======
             
->>>>>>> working-version
             semantics = Semantics(filenames=filenames, classes=classes, colors=colors)
 
 
@@ -455,7 +451,6 @@ class SemanticNerf(Nerfstudio):
         
         # Get all confidence files
         confidence_files = os.listdir(confidence_folder_path)
-        assert len(confidence_files) == len(depth_filenames), "Number of confidence masks does not match number of depth images"
 
         # Process each file in the confidence folder
         for confidence, depth in zip (confidence_files, depth_filenames):

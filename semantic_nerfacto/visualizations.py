@@ -2,10 +2,8 @@ import mediapy as mp
 import numpy as np
 import torch
 import cv2
-<<<<<<< HEAD
-=======
-from PIL import Image
->>>>>>> working-version
+
+
 
 def compare_depth_and_image(image, depth, name):
     # save the depth image and image
@@ -13,13 +11,8 @@ def compare_depth_and_image(image, depth, name):
     min_ = torch.where(depth == depth.min())
     max_ = torch.where(depth == depth.max())
     depth = (depth[..., None].repeat(1, 1, 3) * 255).cpu().numpy().astype(np.uint8)
-<<<<<<< HEAD
     depth = cv2.circle(depth, (min_[1].item(), min_[0].item()), 10, (0, 0, 255), -1)
     cv2.circle(depth, (max_[1].item(), max_[0].item()), 10, (255, 0, 0), -1)
-=======
-    depth = cv2.circle(depth, (min_[1].item(), min_[0].item()), 50, (0, 0, 255), -1)
-    cv2.circle(depth, (max_[1].item(), max_[0].item()), 50, (255, 0, 0), -1)
->>>>>>> working-version
     mp.write_image(f"{name}_depth.png", depth)
     mp.write_image(f"{name}_image.png", image.pixel_values[0].permute(1,2,0).cpu().numpy())
 
@@ -46,7 +39,7 @@ def visualize_depth_before_and_after_scaling(image, lidar_depth, depth, scaled_d
     axs[2].imshow(scaled_depth.cpu())
     axs[2].set_title("Scaled monocular depth")
     axs[2].axis("off")
-<<<<<<< HEAD
+
     plt.colorbar(axs[2].imshow(scaled_depth.cpu()), ax=axs[2])
 
     if torch.sum(valid_mask) != valid_mask.size:
@@ -58,19 +51,18 @@ def visualize_depth_before_and_after_scaling(image, lidar_depth, depth, scaled_d
 
     # show image
     axs[4].imshow(image)
-=======
     plt.colorbar(axs[2].imshow(depth.cpu()), ax=axs[2])
+    plt.colorbar(axs[2].imshow(scaled_depth.cpu()), ax=axs[2])
 
-    # show valid mask
-    axs[3].imshow(valid_mask.cpu())
-    axs[3].set_title("Valid mask")
-    axs[3].axis("off")
-    plt.colorbar(axs[3].imshow(valid_mask.cpu()), ax=axs[3])
+    if torch.sum(valid_mask) != valid_mask.size:
+        # show valid mask
+        axs[3].imshow(valid_mask.cpu())
+        axs[3].set_title("Valid mask")
+        axs[3].axis("off")
+        plt.colorbar(axs[3].imshow(valid_mask.cpu()), ax=axs[3])
 
     # show image
-    img = Image.open(image)
-    axs[4].imshow(img)
->>>>>>> working-version
+    axs[4].imshow(image)
     axs[4].set_title("Image")
     axs[4].axis("off")
 
