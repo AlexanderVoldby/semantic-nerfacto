@@ -26,9 +26,6 @@ class SemanticDepthNerfactoModelConfig(SemanticNerfactoModelConfig):
     use_depth: bool = True
     """Whether to use depth supervision"""
 
-    use_depth: bool = True
-    """Whether to use depth supervision"""
-
 class SemanticDepthNerfactoModel(SemanticNerfactoModel):
     config: SemanticDepthNerfactoModelConfig
 
@@ -52,7 +49,6 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
         
         # Add depth-related metrics if depth images are in the batch
         if self.training and "depth_image" in batch and self.config.use_depth:
-            depth_image = batch["depth_image"].to(self.device)
             if self.config.depth_loss_type in (DepthLossType.DS_NERF, DepthLossType.URF):
                 metrics_dict["depth_loss"] = 0.0
                 sigma = self._get_sigma().to(self.device)
