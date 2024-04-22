@@ -16,7 +16,7 @@ from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel, SemanticN
 class SemanticDepthNerfactoModelConfig(SemanticNerfactoModelConfig):
     # Combine configurations of both models
     _target: Type = field(default_factory=lambda: SemanticDepthNerfactoModel)
-    depth_loss_mult: float = 1e-1
+    depth_loss_mult: float = 1e-3
     is_euclidean_depth: bool = False
     depth_sigma: float = 0.01
     should_decay_sigma: bool = False
@@ -42,6 +42,7 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
         # If depth supervision is applicable, add depth-related outputs
         if ray_bundle.metadata is not None and "directions_norm" in ray_bundle.metadata:
             outputs["directions_norm"] = ray_bundle.metadata["directions_norm"]
+
         return outputs
 
     def get_metrics_dict(self, outputs, batch):
@@ -49,27 +50,26 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
         
         # Add depth-related metrics if depth images are in the batch
         if self.training and "depth_image" in batch and self.config.use_depth:
+            depth_image = batch["depth_image"].to(self.device)
             if self.config.depth_loss_type in (DepthLossType.DS_NERF, DepthLossType.URF):
-                metrics_dict["depth_loss"] = 0.0
                 sigma = self._get_sigma().to(self.device)
-                termination_depth = batch["depth_image"].to(self.device)
+                depth_loss_value = 0
                 for i in range(len(outputs["weights_list"])):
-                    metrics_dict["depth_loss"] += depth_loss(
+                    depth_loss_value += depth_loss(
                         weights=outputs["weights_list"][i],
                         ray_samples=outputs["ray_samples_list"][i],
-                        termination_depth=termination_depth,
+                        termination_depth=depth_image,
                         predicted_depth=outputs["depth"],
                         sigma=sigma,
-                        directions_norm=outputs["directions_norm"],
+                        directions_norm=outputs.get("directions_norm"),
                         is_euclidean=self.config.is_euclidean_depth,
                         depth_loss_type=self.config.depth_loss_type,
-                    ) / len(outputs["weights_list"])
-            elif self.config.depth_loss_type in (DepthLossType.SPARSENERF_RANKING,):
+                    )
+                metrics_dict["depth_loss"] = depth_loss_value / len(outputs["weights_list"])
+            elif self.config.depth_loss_type == DepthLossType.SPARSENERF_RANKING:
                 metrics_dict["depth_ranking"] = depth_ranking_loss(
-                    outputs["expected_depth"], batch["depth_image"].to(self.device)
+                    outputs["expected_depth"], depth_image
                 )
-            else:
-                raise NotImplementedError(f"Unknown depth loss type {self.config.depth_loss_type}")
 
         return metrics_dict
 
@@ -78,15 +78,14 @@ class SemanticDepthNerfactoModel(SemanticNerfactoModel):
         # Add depth-related losses if depth images are in the batch
         if self.training and "depth_image" in batch and self.config.use_depth:
             assert metrics_dict is not None and ("depth_loss" in metrics_dict or "depth_ranking" in metrics_dict)
+            if "depth_loss" in metrics_dict:
+                loss_dict["depth_loss"] = self.config.depth_loss_mult * metrics_dict["depth_loss"]
             if "depth_ranking" in metrics_dict:
                 loss_dict["depth_ranking"] = (
                     self.config.depth_loss_mult
-                    * np.interp(self.step, [0, 2000], [0, 0.2])
                     * metrics_dict["depth_ranking"]
+                    * np.interp(self.step, [0, 2000], [0, 0.2])
                 )
-            if "depth_loss" in metrics_dict:
-                loss_dict["depth_loss"] = self.config.depth_loss_mult * metrics_dict["depth_loss"]
-
         return loss_dict
     
     def get_image_metrics_and_images(
