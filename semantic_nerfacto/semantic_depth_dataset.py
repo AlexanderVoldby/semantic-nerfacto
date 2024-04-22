@@ -4,9 +4,9 @@ import numpy as np
 import torch
 from PIL import Image
 from pathlib import Path
+from tqdm import tqdm
 
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
-from rich.progress import track
 from scipy.stats import linregress
 
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs, Semantics
@@ -20,13 +20,14 @@ from nerfstudio.utils.rich_utils import CONSOLE
 class SemanticDepthDataset(InputDataset):
     exclude_batch_keys_from_device = InputDataset.exclude_batch_keys_from_device + ["mask", "semantics", "depth_image"]
 
-    def __init__(self, dataparser_outputs: DataparserOutputs, scale_factor: float = 1.0):
+    def __init__(self, dataparser_outputs: DataparserOutputs, scale_factor: float = 1.0, use_monocular_depth= True):
         super().__init__(dataparser_outputs, scale_factor)
         assert "semantics" in dataparser_outputs.metadata.keys() and isinstance(self.metadata["semantics"], Semantics)
         self.semantics = self.metadata["semantics"]
         self.mask_indices = torch.tensor(
             [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
         ).view(1, 1, -1)
+        self.use_monocular_depth = use_monocular_depth
 
         # Depth image handling
         # TODO if depth images already exist from LiDAR, extend them with pretrained model
@@ -34,11 +35,13 @@ class SemanticDepthDataset(InputDataset):
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
         # if not self.depth_filenames:
         # Currently always generate depth as LiDAR depth is sparse
-        # if len(dataparser_outputs.image_filenames) > 0 and (
-            # "depth_filenames" not in dataparser_outputs.metadata.keys()
-            # or dataparser_outputs.metadata["depth_filenames"] is None
-        # ):
-        self._generate_depth_images(dataparser_outputs)
+        assert len(dataparser_outputs.image_filenames) > 0 and (
+            "depth_filenames" in dataparser_outputs.metadata.keys()
+            or dataparser_outputs.metadata["depth_filenames"] is not None
+        ), "No depth images in dataset"
+        
+        if self.use_monocular_depth:
+            self._generate_depth_images(dataparser_outputs)
 
     def _generate_depth_images(self, dataparser_outputs: DataparserOutputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -57,7 +60,7 @@ class SemanticDepthDataset(InputDataset):
             repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
-            for image_filename, depth_filename in track(zip(dataparser_outputs.image_filenames, self.depth_filenames), description="Generating depth images"):
+            for image_filename, depth_filename in tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames), desc="Generating depth images"):
                 pil_image = Image.open(image_filename)
                 depth_image = Image.open(depth_filename)
                 depth_array = np.array(depth_image)
