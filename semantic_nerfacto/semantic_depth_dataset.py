@@ -23,17 +23,6 @@ from nerfstudio.utils.rich_utils import CONSOLE
 from semantic_nerfacto.visualizations import compare_depth_and_image, visualize_depth_before_and_after_scaling
 
 
-def upsample_depth(depth_tensor, target_height, target_width):
-    # Helper function to upsaple monocular depth to the same size as liDAR depth
-    if depth_tensor.dim() == 2:
-        depth_tensor = depth_tensor.unsqueeze(0).unsqueeze(0)
-    elif depth_tensor.dim() == 3:
-        depth_tensor = depth_tensor.unsqueeze(1)
-    
-    # Upsample to match the input image size
-    depth_upsampled = F.interpolate(depth_tensor, size=(target_height, target_width), mode='bilinear', align_corners=False)
-    return depth_upsampled.squeeze()  # remove extra dimensions if added
-
 class SemanticDepthDataset(InputDataset):
     exclude_batch_keys_from_device = InputDataset.exclude_batch_keys_from_device + ["mask", "semantics", "depth_image"]
 
@@ -69,18 +58,15 @@ class SemanticDepthDataset(InputDataset):
             print("Loading pseudodata depth from cache!")
             self.depths = torch.from_numpy(np.load(cache)).to(device)
         else:
-            # TODO: Invert pseudo-depth image as it outputs disparity
-            # Scale lidar depth so it is in meters instead of millimeters.
-            # Lidar depth should probably be scaled globally but maybe we can do it in the cache
-            # Fit line to each image individually and appy scale and shift.
             CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
-            # losses.FORCE_PSEUDODEPTH_LOSS = True
             depth_tensors = []
             # Change to small to speed up otherwise use depth-anything-base
             repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
             for i, (image_filename, depth_filename) in enumerate(tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames), desc="Generating depth images")):
+                print(image_filename)
+                print(depth_filename)
                 pil_image = Image.open(image_filename)
                 depth_image = Image.open(depth_filename)
                 depth_array = np.array(depth_image)
@@ -104,7 +90,7 @@ class SemanticDepthDataset(InputDataset):
                     # Save every 20th image
                     if i % 20 == 0:
                         name = os.path.basename(image_filename)
-                        folder = str(image_filename.parent.parent)
+                        folder = str(image_filename.parent.parent) + "/visualizations"
                         saved_name = folder + "/" + name
                         
                         try:
@@ -165,6 +151,7 @@ class SemanticDepthDataset(InputDataset):
             filepath = self.depth_filenames[image_idx]
             height = int(self._dataparser_outputs.cameras.height[image_idx])
             width = int(self._dataparser_outputs.cameras.width[image_idx])
+            # LiDAR is scaled by 1e-3 if it already exists
             scale_factor = self.depth_unit_scale_factor * self.scale_factor
             depth_image = get_depth_image_from_path(
                 filepath=filepath, height=height, width=width, scale_factor=scale_factor

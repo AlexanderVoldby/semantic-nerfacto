@@ -39,14 +39,14 @@ def visualize_depth_before_and_after_scaling(image, lidar_depth, depth, scaled_d
     axs[2].axis("off")
     plt.colorbar(axs[2].imshow(scaled_depth.cpu()), ax=axs[2])
 
-    # show valid mask
-    axs[3].imshow(valid_mask.cpu())
-    axs[3].set_title("Valid mask")
-    axs[3].axis("off")
-    plt.colorbar(axs[3].imshow(valid_mask.cpu()), ax=axs[3])
+    if torch.sum(valid_mask) != valid_mask.size:
+        # show valid mask
+        axs[3].imshow(valid_mask.cpu())
+        axs[3].set_title("Valid mask")
+        axs[3].axis("off")
+        plt.colorbar(axs[3].imshow(valid_mask.cpu()), ax=axs[3])
 
     # show image
-
     axs[4].imshow(image)
     axs[4].set_title("Image")
     axs[4].axis("off")

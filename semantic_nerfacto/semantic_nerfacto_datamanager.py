@@ -17,9 +17,10 @@ from semantic_nerfacto.semantic_depth_dataset import SemanticDepthDataset
 class SemanticNerfactoDataManagerConfig(VanillaDataManagerConfig):
     """Creates the semantic depth dataset for semantic depth nerfacto
     """
+    
+    _target: Type = field(default_factory=lambda: SemanticNerfactoDataManager)
     use_monocular_depth: bool = True
     """Whether to extend lidar depth with monocular depth"""
-    _target: Type = field(default_factory=lambda: SemanticNerfactoDataManager)
 
 
 class SemanticNerfactoDataManager(VanillaDataManager):
