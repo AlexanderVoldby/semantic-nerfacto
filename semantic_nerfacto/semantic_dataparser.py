@@ -362,21 +362,12 @@ class SemanticNerf(Nerfstudio):
             self.prompted_user = True
 
         downscale_suffix = f"_{self.config.downscale_factor}" if self.config.downscale_factor != 1 else ""
-        # images_folder = f"images{downscale_suffix}"
-        # segmentations_folder = f"segmentations{downscale_suffix}"
         images_folder = "images"
         segmentations_folder = "segmentations"
 
         # --- semantics ---
-        # TODO: Modify this part to correctly include semantics in the desired format
         if self.config.include_semantics:
-            # empty_path = Path()
-            # replace_this_path = str(empty_path / images_folder / empty_path)
-            # with_this_path = str(empty_path / segmentations_folder / empty_path)
-            # filenames = [
-                # Path(str(image_filename).replace(replace_this_path, with_this_path).replace(".jpg", ".png"))
-                # for image_filename in image_filenames
-            # ]
+
             filenames = [
                 Path(str(image_filename).replace(images_folder, segmentations_folder).replace(".jpg", ".png"))
                 for image_filename in image_filenames
@@ -389,18 +380,6 @@ class SemanticNerf(Nerfstudio):
             stuff_colors = torch.tensor(panoptic_classes["stuff_colors"], dtype=torch.float32) / 255.0
             colors = torch.cat((thing_colors, stuff_colors), 0)
             
-            # Define classes that we expect to see in the dataset
-            expected_classes = ["chair", "couch", "bed", "dining table", "toilet",
-                                "tv", "refrigerator", "clock", "vase", "blanket",
-                                "curtain", "door-stuff", "floor-wood", "mirror-stuff",
-                                "pillow", "shelf", "stairs", "wall-brick", "table",
-                                "window", "ceiling", "floor", "wall", "rug"]
-            
-            # List of classes that we exclude from training. These are masked out from training for all modalitites
-            # TODO: Passing class masks with no nonzero indices (non-existing classes) throws an error
-            mask_classes = [c for c in classes if c not in expected_classes]
-            
-            # TODO: Figure out how to use mask_classes and apply it
             semantics = Semantics(filenames=filenames, classes=classes, colors=colors)
 
 
