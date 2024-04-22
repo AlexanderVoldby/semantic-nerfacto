@@ -32,8 +32,8 @@ class SemanticDepthNerfactoModelConfig(SemanticNerfactoModelConfig):
 class SemanticDepthNerfactoModel(SemanticNerfactoModel):
     config: SemanticDepthNerfactoModelConfig
 
-    def populate_modules(self):
-        super().populate_modules()
+    def __init__(self, config: SemanticDepthNerfactoModelConfig, metadata: Dict, **kwargs) -> None:
+        super().__init__(config, metadata, **kwargs)
         if self.config.should_decay_sigma:
             self.depth_sigma = torch.tensor([self.config.starting_depth_sigma])
         else:
