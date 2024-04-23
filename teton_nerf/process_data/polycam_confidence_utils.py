@@ -12,6 +12,7 @@ def polycam_confidence_to_json(
     image_filenames: List[Path],
     depth_filenames: List[Path],
     confidence_filenames: List[Path],
+    segmentation_filenames: List[Path],
     cameras_dir: Path,
     output_dir: Path,
     min_blur_score: float = 0.0,
@@ -33,6 +34,7 @@ def polycam_confidence_to_json(
     """
     use_depth = len(image_filenames) == len(depth_filenames)
     use_confidence = len(confidence_filenames) == len(depth_filenames)
+    use_segmentations = len(segmentation_filenames) == len(image_filenames)
     data = {}
     data["camera_model"] = CAMERA_MODELS["perspective"].value
     # Needs to be a string for camera_utils.auto_orient_and_center_poses
@@ -58,6 +60,8 @@ def polycam_confidence_to_json(
             frame["depth_file_path"] = f"./depth/frame_{i+1:05d}{depth_filenames[i].suffix}"
         if use_confidence:
             frame["confidence_file_path"] = f"./confidence/frame_{i+1:05d}{confidence_filenames[i].suffix}"
+        if use_segmentations:
+            frame["segmentation_file_path"] = f"./segmentation/frame_{i+1:05d}{segmentation_filenames[i].suffix}"
         # Transform matrix to nerfstudio format. Please refer to the documentation for coordinate system conventions.
         frame["transform_matrix"] = [
             [frame_json["t_20"], frame_json["t_21"], frame_json["t_22"], frame_json["t_23"]],

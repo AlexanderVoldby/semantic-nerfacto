@@ -1,20 +1,20 @@
-# Some basic setup:
 # Setup detectron2 logger
-import detectron2
 from detectron2.utils.logger import setup_logger
 setup_logger()
-
-# import some common libraries
-import torch
-import os, json, cv2, random, glob
-import click
 
 # import some common detectron2 utilities
 from detectron2 import model_zoo
 from detectron2.engine import DefaultPredictor
 from detectron2.config import get_cfg
 from detectron2.utils.visualizer import Visualizer
-from detectron2.data import MetadataCatalog, DatasetCatalog
+from detectron2.data import MetadataCatalog
+
+import os
+import json
+import cv2
+import glob
+import click
+from pathlib import Path
 
 
 class SemanticSegmentor():
@@ -32,8 +32,6 @@ class SemanticSegmentor():
                           "mirror-stuff", "pillow", "shelf", "stairs",
                           "wall-brick", "table", "window", "ceiling", "floor", "wall", "rug"]
         
-        # self.cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(expected_stuff) + len(expected_things)
-        # self.metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0]).set(thing_classes=expected_things, stuff_classes=expected_stuff)
         self.metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0])
         self.predictor = DefaultPredictor(self.cfg)
         self.num_things = len(self.metadata.thing_classes)
@@ -43,20 +41,22 @@ class SemanticSegmentor():
         panoptic_seg, segments_info = self.predictor(image)["panoptic_seg"]
         # We are doing semantic segmentation so we simply want to map the panoptic ID to a class ID:
         panoptic_seg = panoptic_seg.cpu().numpy()
+        semantic_seg = panoptic_seg.copy()
         for info in segments_info:
             try:
                 if info["isthing"]:
-                    panoptic_seg[panoptic_seg == info["id"]] = info["category_id"]
+                    semantic_seg[semantic_seg == info["id"]] = info["category_id"]
                 else:
-                    panoptic_seg[panoptic_seg == info["id"]] = info["category_id"] + self.num_things
+                    semantic_seg[semantic_seg == info["id"]] = info["category_id"] + self.num_things
             except Exception as e:
                 print(f"Error: {e}")
-        return panoptic_seg, segments_info
+        return semantic_seg, panoptic_seg, segments_info
     
-    def visualize(self, image, panoptic_segmentation, segments_info):
+    def visualize(self, image, panoptic_segmentation, segments_info, filename):
         v = Visualizer(image[:, :, ::-1], MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0]), scale=1.2)
         out = v.draw_panoptic_seg_predictions(panoptic_segmentation.to("cpu"), segments_info)
-        cv2.imshow(out.get_image()[:, :, ::-1])
+        cv2.imwrite(f"{filename.strip('.png')}_segmentation.png", out.get_image()[:, :, ::-1])
+        # cv2.imshow(out.get_image()[:, :, ::-1])
         
     def save_metadata(self, data):
         metadict = {
@@ -88,28 +88,28 @@ class SemanticSegmentor():
             segmentation_folder_path = os.path.join(data, f'segmentations{suffix}')
             if not os.path.exists(segmentation_folder_path):
                 os.makedirs(segmentation_folder_path)
+            
+            visualization_folder_path = os.path.join(data, "semantic_visualizations")
+            if not os.path.exists(visualization_folder_path):
+                os.makedirs(visualization_folder_path)
 
-            # Find all image files in the current image folder
-            image_files = glob.glob(os.path.join(image_folder_path, '*.*'))  # Adjust the pattern if needed
+            # Find all image files in the current image folder and make segmentation
+            image_files = glob.glob(os.path.join(image_folder_path, '*.*'))
+            segmentation_filenames = []
             for image_file in image_files:
-                try:
-                    # Load the image
-                    image = cv2.imread(image_file)
-                    # Perform panoptic segmentation
-                    panoptic_segmentation, segments_info = self.predict(image)
-                    # Ensure the segmentation is on CPU and converted to numpy
-                    panoptic_segmentation = panoptic_segmentation
-                    # Construct the path to save the segmented image
-                    base_name = os.path.basename(image_file)
-                    segmentation_file_path = os.path.join(segmentation_folder_path, base_name).replace(".jpg", ".png")
+                image = cv2.imread(image_file)
+                semantic_segmentation, panoptic_segmentation, segments_info = self.predict(image)
+                base_name = os.path.basename(image_file).replace(".jpg", ".png")
+                visualization_file_path = os.path.join(visualization_folder_path, base_name)
+                segmentation_file_path = Path(segmentation_folder_path / base_name)
+                segmentation_filenames.append(segmentation_file_path)
+                cv2.imwrite(segmentation_file_path, semantic_segmentation)
+                self.visualize(image, panoptic_segmentation, segments_info, visualization_file_path)
 
-                    # Save the segmented image
-                    cv2.imwrite(segmentation_file_path, panoptic_segmentation)
-                except Exception as e:
-                    print(f"Error: {e}")
-        
         # Add panoptic_classes.json to dataset
         self.save_metadata(data)
+        
+        return segmentation_filenames
 
 
 @click.command()

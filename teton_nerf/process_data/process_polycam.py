@@ -45,6 +45,8 @@ class ProcessPolycamConfidence(BaseConverterToNerfstudioDataset):
     """If True, processes the generated depth maps from Polycam"""
     use_confidence: bool = False
     """If True, processes the generated confidence maps for the depth maps"""
+    add_semantics: bool = False
+    """If True, adds semantic segmentation to the dataset using pretrained detectron2 model"""
 
     def main(self) -> None:
         """Process images into a nerfstudio dataset."""
@@ -124,11 +126,17 @@ class ProcessPolycamConfidence(BaseConverterToNerfstudioDataset):
             )
             summary_log.extend(confidence_processing_log)
             
+        if self.add_semantics:
+            from teton_nerf.processing_tools.detectron import SemanticSegmentor
+            SS = SemanticSegmentor()
+            segmentation_filenames = SS.add_segmentation(self.output_dir)
+            
         summary_log.extend(
             polycam_confidence_to_json(
                 image_filenames=polycam_image_filenames,
                 depth_filenames=polycam_depth_filenames,
                 confidence_filenames=polycam_confidence_filenames,
+                segmentation_filenames=segmentation_filenames,
                 cameras_dir=polycam_cameras_dir,
                 output_dir=self.output_dir,
                 min_blur_score=self.min_blur_score,
