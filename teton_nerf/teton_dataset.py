@@ -22,7 +22,7 @@ from nerfstudio.utils.rich_utils import CONSOLE
 
 from teton_nerf.visualizations import compare_depth_and_image, visualize_depth_before_and_after_scaling
 
-class SemanticDepthDataset(InputDataset):
+class TetonNerfDataset(InputDataset):
     exclude_batch_keys_from_device = InputDataset.exclude_batch_keys_from_device + ["mask", "semantics", "depth_image"]
 
     def __init__(self, dataparser_outputs: DataparserOutputs, scale_factor: float = 1.0, use_monocular_depth= True):

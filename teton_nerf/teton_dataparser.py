@@ -1,4 +1,5 @@
-""" Initial attampt at Data parser with semantic support for nerfstudio datasets. """
+"""Dataparser that extends nerfstudio dataparser with semantic support and
+confidence maps for the depth images"""
 
 from __future__ import annotations
 
@@ -31,18 +32,18 @@ MAX_AUTO_RESOLUTION = 1600
 
 
 @dataclass
-class SemanticDataParserConfig(NerfstudioDataParserConfig):
+class TetonDataparserConfig(NerfstudioDataParserConfig):
     
-    _target: Type = field(default_factory=lambda: SemanticNerf)
+    _target: Type = field(default_factory=lambda: TetonDataparser)
     """target class to instantiate"""
     include_semantics: bool = True
     """whether or not to include loading of semantics data"""
 
 
 @dataclass
-class SemanticNerf(Nerfstudio):
+class TetonDataparser(Nerfstudio):
     
-    config: SemanticDataParserConfig
+    config: TetonDataparserConfig
     
     def _generate_dataparser_outputs(self, split="train"):
         assert self.config.data.exists(), f"Data directory {self.config.data} does not exist."

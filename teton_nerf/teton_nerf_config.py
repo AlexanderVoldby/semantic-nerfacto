@@ -16,7 +16,7 @@ from nerfstudio.plugins.types import MethodSpecification
 from nerfstudio.plugins.registry_dataparser import DataParserSpecification
 
 from teton_nerf.semantic_nerfacto import SemanticNerfactoModelConfig
-from teton_nerf.semantic_dataparser import SemanticDataParserConfig
+from teton_nerf.semantic_dataparser import TetonDataparserConfig
 from teton_nerf.semantic_nerfacto_datamanager import TetonNerfDatamanagerConfig
 from teton_nerf.semantic_nerfacto_pipeline import SemanticNerfactoPipelineConfig
 from teton_nerf.semantic_depth_nerfacto_pipeline import SemanticDepthNerfactoPipelineConfig
@@ -24,7 +24,7 @@ from teton_nerf.semantic_depth_nerfacto import SemanticDepthNerfactoModelConfig
 from teton_nerf.teton_nerf import TetonNerfModelConfig
 from teton_nerf.teton_nerf_pipeline import TetonNerfPipelineConfig
 
-semantic_dataparser = DataParserSpecification(config=SemanticDataParserConfig())
+semantic_dataparser = DataParserSpecification(config=TetonDataparserConfig())
 
 semantic_nerfacto = MethodSpecification(
     config=TrainerConfig(
@@ -35,7 +35,7 @@ semantic_nerfacto = MethodSpecification(
         mixed_precision=True,
         pipeline=SemanticNerfactoPipelineConfig(
             datamanager=TetonNerfDatamanagerConfig(
-                dataparser=SemanticDataParserConfig(),
+                dataparser=TetonDataparserConfig(),
                 train_num_rays_per_batch=4096,
                 eval_num_rays_per_batch=4096,
             ),
@@ -73,7 +73,7 @@ semantic_depth_nerfacto = MethodSpecification(
         mixed_precision=True,
         pipeline=SemanticDepthNerfactoPipelineConfig(
             datamanager=TetonNerfDatamanagerConfig(
-                dataparser=SemanticDataParserConfig(),
+                dataparser=TetonDataparserConfig(),
                 train_num_rays_per_batch=4096,
                 eval_num_rays_per_batch=4096,
             ),
@@ -110,7 +110,7 @@ teton_nerf = MethodSpecification(
         mixed_precision=True,
         pipeline=TetonNerfPipelineConfig(
             datamanager=TetonNerfDatamanagerConfig(
-                dataparser=SemanticDataParserConfig(),
+                dataparser=TetonDataparserConfig(),
                 train_num_rays_per_batch=4096,
                 eval_num_rays_per_batch=4096,
             ),
