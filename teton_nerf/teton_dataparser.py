@@ -5,19 +5,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Optional, Tuple, Type
+from typing import Type
 import os
 import glob
 import shutil
 
 import numpy as np
 import torch
-from PIL import Image
 
 from nerfstudio.cameras import camera_utils
 from nerfstudio.cameras.cameras import CAMERA_MODEL_TO_TYPE, Cameras, CameraType
 from nerfstudio.data.dataparsers.nerfstudio_dataparser import Nerfstudio, NerfstudioDataParserConfig
-from nerfstudio.data.dataparsers.base_dataparser import DataParser, DataParserConfig, DataparserOutputs, Semantics
+from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs, Semantics
 from nerfstudio.data.scene_box import SceneBox
 from nerfstudio.data.utils.dataparsers_utils import (
     get_train_eval_split_all,
@@ -142,11 +141,10 @@ class TetonDataparser(Nerfstudio):
                 depth_fname = self._get_fname(depth_filepath, data_dir, downsample_folder_prefix="depths_")
                 depth_filenames.append(depth_fname)
             
-        if len(depth_filenames) == len(image_filenames):
-            confidence_filenames = self.rename_and_move_confidence_files(data_dir, depth_filenames)
-        print(f"length confidence: {len(confidence_filenames)}")
-        print(confidence_filenames)
-        print(f"length depth: {len(depth_filenames)}")
+            if "confidence_file_path" in frame:
+                confidence_filepath = Path(frame["confidence_file_path"])
+                confidence_fname = self._get_fname(confidence_filepath, data_dir, downsample_folder_prefix="confidence_")
+                confidence_filenames.append(confidence_fname)
             
         assert len(mask_filenames) == 0 or (len(mask_filenames) == len(image_filenames)), """
         Different number of image and mask filenames.
@@ -411,69 +409,3 @@ class TetonDataparser(Nerfstudio):
         
         
         return dataparser_outputs
-    
-    def get_depth_confidence_masks(self, data):
-        # Find the directory ending with 'poly'
-        poly_folders = [f for f in glob.glob(os.path.join(data, '*poly')) if os.path.isdir(f)]
-        
-        # Check if we found exactly one 'poly' folder
-        if len(poly_folders) != 1:
-            raise ValueError("Expected exactly one folder ending in 'poly', found {}: {}".format(len(poly_folders), poly_folders))
-        
-
-        poly_folder = poly_folders[0]
-        confidence_folder = os.path.join(poly_folder, 'confidence')
-        
-        # Check if the 'confidence' folder exists
-        if not os.path.exists(confidence_folder):
-            raise FileNotFoundError(f"The 'confidence' folder does not exist in {poly_folder}")
-        
-        files = os.listdir(confidence_folder)
-
-        return files
-
-    def rename_and_move_confidence_files(self, data, depth_filenames):
-        
-        # Find the directory ending with 'poly'
-        poly_folders = [f for f in os.listdir(data) if f.endswith('poly') and os.path.isdir(os.path.join(data, f))]
-        
-        # Check if we found exactly one 'poly' folder
-        if len(poly_folders) != 1:
-            raise ValueError("Expected exactly one folder ending in 'poly', found {}: {}".format(len(poly_folders), poly_folders))
-        
-        poly_folder = poly_folders[0]
-        confidence_folder_path = os.path.join(data, poly_folder, 'confidence')
-        
-        # Verify the 'confidence' folder exists
-        if not os.path.exists(confidence_folder_path):
-            raise FileNotFoundError(f"The 'confidence' folder does not exist in {poly_folder}")
-        
-        # Get all confidence files
-        confidence_files = os.listdir(confidence_folder_path)
-
-        # Process each file in the confidence folder
-        for confidence, depth in zip (confidence_files, depth_filenames):
-            # Assuming the filename structure is 'frame_<number>.png'
-            depth = os.path.basename(depth)
-            
-            if depth.startswith('frame_') and depth.endswith('.png'):
-                frame_number = depth.split('_')[1].split('.')[0]
-                new_confidence = f'confidence_{frame_number}.png'
-                new_file_path = os.path.join(data, 'confidence', new_confidence)
-
-                # Make sure the target directory exists, if not, create it
-                target_dir = os.path.dirname(new_file_path)
-                if not os.path.exists(target_dir):
-                    os.makedirs(target_dir)
-
-                # Full path of the current file
-                current_file_path = os.path.join(confidence_folder_path, confidence)
-
-                # Move and rename the file
-                shutil.move(current_file_path, new_file_path)
-        
-        new_dir = os.path.join(data, 'confidence')
-        confidences = [os.path.join(new_dir, filename) for filename in os.listdir(new_dir)]
-        return confidences
-
-            
