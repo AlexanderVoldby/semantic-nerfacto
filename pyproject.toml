@@ -1,6 +1,6 @@
 [project]
 name = "teton_nerf"
-version = "0.1.1"
+version = "1.0.0"
 
 dependencies = [
     "nerfstudio>=1.0.0",
@@ -11,6 +11,6 @@ dependencies = [
 include = ["teton_nerf*"]
 
 [project.entry-points.'nerfstudio.method_configs']
-semantic_nerfacto = 'semantic_nerfacto.teton_nerf_config:semantic_nerfacto'
-semantic_depth_nerfacto = 'semantic_nerfacto.teton_nerf_config:semantic_depth_nerfacto'
-teton_nerf = 'semantic_nerfacto.teton_nerf_config:teton_nerf'
+semantic_nerfacto = 'teton_nerf.teton_nerf_config:semantic_nerfacto'
+semantic_depth_nerfacto = 'teton_nerf.teton_nerf_config:semantic_depth_nerfacto'
+teton_nerf = 'teton_nerf.teton_nerf_config:teton_nerf'
