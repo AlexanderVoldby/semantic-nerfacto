@@ -64,7 +64,6 @@ class TetonNerfModel(NerfactoModel):
     config: TetonNerfModelConfig
 
     def __init__(self, config: TetonNerfModelConfig, metadata: Dict, **kwargs) -> None:
-        # semantics is either Semantics instance or None
         self.semantics = metadata["semantics"]
         super().__init__(config=config, **kwargs)
         if self.semantics is not None:
@@ -135,7 +134,6 @@ class TetonNerfModel(NerfactoModel):
             field_outputs = scale_gradients_by_distance_squared(field_outputs, ray_samples)
             
         # If depth supervision is applicable, add depth-related outputs
-        # TODO: Use if self.config.use_depth?
         if ray_bundle.metadata is not None and "directions_norm" in ray_bundle.metadata:
             outputs["directions_norm"] = ray_bundle.metadata["directions_norm"]
 
@@ -144,7 +142,6 @@ class TetonNerfModel(NerfactoModel):
         ray_samples_list.append(ray_samples)
         
         # Add semantics to output
-
         if self.config.use_semantics: 
             semantic_weights = weights
             if not self.config.pass_semantic_gradients:

@@ -36,7 +36,6 @@ class TetonNerfDataset(InputDataset):
         self.use_monocular_depth = use_monocular_depth
 
         # Depth image handling
-        # TODO Skip all this if not using depth
         self.depth_filenames = self.metadata.get("depth_filenames")
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
         
@@ -60,7 +59,6 @@ class TetonNerfDataset(InputDataset):
         else:
             CONSOLE.print("[bold yellow] Extending LiDAR depth with Depth Anything!")
             depth_tensors = []
-            # Change to small to speed up otherwise use depth-anything-base
             repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
@@ -88,8 +86,8 @@ class TetonNerfDataset(InputDataset):
                     # Convert to LiDAR depth where the depth is confident
                     depth[valid_mask] = depth_tensor[valid_mask]
                     
-                    # Save every 20th image
-                    if i % 5 == 0:
+                    # Save every 10th image
+                    if i % 10 == 0:
                         name = os.path.basename(image_filename)
                         folder = str(image_filename.parent.parent) + "/visualizations"
                         if not os.path.exists(folder):
@@ -158,7 +156,6 @@ class TetonNerfDataset(InputDataset):
             filepath = self.depth_filenames[image_idx]
             height = int(self._dataparser_outputs.cameras.height[image_idx])
             width = int(self._dataparser_outputs.cameras.width[image_idx])
-            # LiDAR is scaled by 1e-3 if it already exists
             scale_factor = self.depth_unit_scale_factor * self.scale_factor
             depth_image = get_depth_image_from_path(
                 filepath=filepath, height=height, width=width, scale_factor=scale_factor
