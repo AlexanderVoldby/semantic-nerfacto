@@ -64,10 +64,10 @@ class TetonNerfModel(NerfactoModel):
     config: TetonNerfModelConfig
 
     def __init__(self, config: TetonNerfModelConfig, metadata: Dict, **kwargs) -> None:
-        if "semantics" in metadata.keys() and isinstance(metadata["semantics"], Semantics): 
-            self.semantics = metadata["semantics"]
+        # semantics is either Semantics instance or None
+        self.semantics = metadata["semantics"]
         super().__init__(config=config, **kwargs)
-        if "semantics" in metadata.keys() and isinstance(metadata["semantics"], Semantics):
+        if self.semantics is not None:
             self.colormap = self.semantics.colors.clone().detach().to(self.device)
         
         if self.config.should_decay_sigma:

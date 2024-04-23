@@ -16,14 +16,12 @@ def compare_depth_and_image(image, depth, name):
     mp.write_image(f"{name}_depth.png", depth)
     mp.write_image(f"{name}_image.png", image.pixel_values[0].permute(1,2,0).cpu().numpy())
 
-def visualize_depth_before_and_after_scaling(image, lidar_depth, depth, scaled_depth, name):
+def visualize_depth_before_and_after_scaling(image, lidar_depth, depth, scaled_depth, valid_mask, name):
     # visualize depth maps before and after scaling
     import matplotlib.pyplot as plt
 
     # create subfigure with three images (lidar depth, monocular depth, scaled monocular depth).
     # include a colorbar for each image.
-    
-    valid_mask = lidar_depth > 0
 
     fig, axs = plt.subplots(1, 5, figsize=(25, 5))
     axs[0].imshow(lidar_depth.cpu())
@@ -39,27 +37,13 @@ def visualize_depth_before_and_after_scaling(image, lidar_depth, depth, scaled_d
     axs[2].imshow(scaled_depth.cpu())
     axs[2].set_title("Scaled monocular depth")
     axs[2].axis("off")
-
     plt.colorbar(axs[2].imshow(scaled_depth.cpu()), ax=axs[2])
 
-    if torch.sum(valid_mask) != valid_mask.size:
-        # show valid mask
-        axs[3].imshow(valid_mask.cpu())
-        axs[3].set_title("Valid mask")
-        axs[3].axis("off")
-        plt.colorbar(axs[3].imshow(valid_mask.cpu()), ax=axs[3])
-
-    # show image
-    axs[4].imshow(image)
-    plt.colorbar(axs[2].imshow(depth.cpu()), ax=axs[2])
-    plt.colorbar(axs[2].imshow(scaled_depth.cpu()), ax=axs[2])
-
-    if torch.sum(valid_mask) != valid_mask.size:
-        # show valid mask
-        axs[3].imshow(valid_mask.cpu())
-        axs[3].set_title("Valid mask")
-        axs[3].axis("off")
-        plt.colorbar(axs[3].imshow(valid_mask.cpu()), ax=axs[3])
+    # show valid mask
+    axs[3].imshow(valid_mask.cpu())
+    axs[3].set_title("Valid mask")
+    axs[3].axis("off")
+    plt.colorbar(axs[3].imshow(valid_mask.cpu()), ax=axs[3])
 
     # show image
     axs[4].imshow(image)

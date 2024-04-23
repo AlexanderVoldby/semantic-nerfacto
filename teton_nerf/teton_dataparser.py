@@ -35,8 +35,6 @@ class TetonDataparserConfig(NerfstudioDataParserConfig):
     
     _target: Type = field(default_factory=lambda: TetonDataparser)
     """target class to instantiate"""
-    include_semantics: bool = True
-    """whether or not to include loading of semantics data"""
 
 
 @dataclass
@@ -374,7 +372,7 @@ class TetonDataparser(Nerfstudio):
 
         # --- semantics ---
         semantics = None
-        if self.config.include_semantics:
+        if (self.config.data / "panoptic_classes.json").exists():
 
             filenames = [
                 Path(str(image_filename).replace(images_folder, segmentations_folder).replace(".jpg", ".png"))

@@ -17,7 +17,6 @@ from scipy.stats import linregress
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs
 from nerfstudio.data.datasets.base_dataset import InputDataset
 from nerfstudio.data.utils.data_utils import get_semantics_and_mask_tensors_from_path, get_depth_image_from_path
-from nerfstudio.model_components import losses
 from nerfstudio.utils.rich_utils import CONSOLE
 
 from teton_nerf.visualizations import compare_depth_and_image, visualize_depth_before_and_after_scaling
@@ -40,14 +39,14 @@ class TetonNerfDataset(InputDataset):
         # TODO Skip all this if not using depth
         self.depth_filenames = self.metadata.get("depth_filenames")
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
-        # if not self.depth_filenames:
-        # Currently always generate depth as LiDAR depth is sparse
-        assert len(dataparser_outputs.image_filenames) > 0 and (
-            "depth_filenames" in dataparser_outputs.metadata.keys()
-            or dataparser_outputs.metadata["depth_filenames"] is not None
-        ), "No depth images in dataset"
         
         if self.use_monocular_depth:
+            assert len(dataparser_outputs.image_filenames) > 0 and (
+            "depth_filenames" in dataparser_outputs.metadata.keys()
+            or dataparser_outputs.metadata["depth_filenames"] is not None
+            ), "No depth images in dataset"
+            
+            self.confidence_filenames = self.metadata.get("confidence_filenames")
             self._generate_depth_images(dataparser_outputs)
 
 
@@ -59,17 +58,18 @@ class TetonNerfDataset(InputDataset):
             print("Loading pseudodata depth from cache!")
             self.depths = torch.from_numpy(np.load(cache)).to(device)
         else:
-            CONSOLE.print("[bold yellow] No depth data found! Generating pseudodepth...")
+            CONSOLE.print("[bold yellow] Extending LiDAR depth with Depth Anything!")
             depth_tensors = []
             # Change to small to speed up otherwise use depth-anything-base
             repo = "LiheYoung/depth-anything-base-hf"
             image_processor = AutoImageProcessor.from_pretrained(repo)
             model = AutoModelForDepthEstimation.from_pretrained(repo)
-            for i, (image_filename, depth_filename) in enumerate(tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames), desc="Generating depth images")):
+            for i, (image_filename, depth_filename, confidence_filename) in enumerate(tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames, self.confidence_filenames), desc="Generating depth images")):
                 pil_image = Image.open(image_filename)
-                depth_image = Image.open(depth_filename)
-                depth_array = np.array(depth_image)
-                depth_tensor = torch.from_numpy(depth_array).float() * 1e-3 # Divide by 1000 to scale to meters
+                depth_array = np.array(Image.open(depth_filename))
+                depth_tensor = torch.from_numpy(depth_array).float() * self.depth_unit_scale_factor # Divide by 1000 to scale to meters
+                confidence_array = np.array(Image.open(confidence_filename))
+                valid_mask = torch.from_numpy(confidence_array).int() == 255 # Only use 100% confident values 
                 inputs = image_processor(images=pil_image, return_tensors="pt")
                 with torch.no_grad():
                     outputs = model(**inputs)
@@ -85,25 +85,26 @@ class TetonNerfDataset(InputDataset):
                     # Fit the predicted_depth to the LiDAR depth
                     scale, shift = self.compute_scale_shift(prediction, depth_tensor)
                     depth  = scale * prediction + shift
+                    # Convert to LiDAR depth where the depth is confident
+                    depth[valid_mask] = depth_tensor[valid_mask]
                     
                     # Save every 20th image
-                    if i % 20 == 0:
+                    if i % 5 == 0:
                         name = os.path.basename(image_filename)
                         folder = str(image_filename.parent.parent) + "/visualizations"
+                        if not os.path.exists(folder):
+                            os.mkdir(folder)
                         saved_name = folder + "/" + name
-                        
-                        try:
-                            compare_depth_and_image(inputs, depth, saved_name)
-                            visualize_depth_before_and_after_scaling(
-                                pil_image,
-                                depth_tensor,
-                                prediction,
-                                depth,
-                                saved_name
-                            )
-                            print(f"Saved figures under {name}")
-                        except Exception as e:
-                            print(f"Error saving image: {e}")
+
+                        visualize_depth_before_and_after_scaling(
+                            pil_image,
+                            depth_tensor,
+                            prediction,
+                            depth,
+                            valid_mask,
+                            saved_name
+                        )
+
 
                 depth_tensors.append(depth)
                 
@@ -125,22 +126,29 @@ class TetonNerfDataset(InputDataset):
                 json.dump(itd, outfile)
 
     def compute_scale_shift(self, monocular_depth, lidar_depth):
-        valid_mask = lidar_depth > 0  # Assuming zero where no LiDAR data
-        scaled_monocular = monocular_depth[valid_mask].flatten()
-        lidar_depth_flat = lidar_depth[valid_mask].flatten()
+
+        scaled_monocular = monocular_depth.flatten()
+        lidar_depth_flat = lidar_depth.flatten()
 
         slope, intercept, r_value, p_value, std_err = linregress(scaled_monocular.numpy(), lidar_depth_flat.numpy())
         return slope, intercept
 
     def get_metadata(self, data: Dict) -> Dict:
         
-        # handle mask
-        filepath = self.semantics.filenames[data["image_idx"]]
-        semantic_label, mask = get_semantics_and_mask_tensors_from_path(
-            filepath=filepath, mask_indices=self.mask_indices, scale_factor=self.scale_factor
-        )
-        if "mask" in data.keys():
-            mask = mask & data["mask"]
+        metadata = {}
+        
+        # handle semantics
+        if self.semantics is not None:
+            filepath = self.semantics.filenames[data["image_idx"]]
+            semantic_label, mask = get_semantics_and_mask_tensors_from_path(
+                filepath=filepath, mask_indices=self.mask_indices, scale_factor=self.scale_factor
+            )
+            # handle mask
+            if "mask" in data.keys():
+                mask = mask & data["mask"]
+            
+            metadata["semantics"] = semantic_label
+            metadata["mask"] = mask
         
         # Handle depth stuff
         image_idx = data["image_idx"]
@@ -155,7 +163,10 @@ class TetonNerfDataset(InputDataset):
             depth_image = get_depth_image_from_path(
                 filepath=filepath, height=height, width=width, scale_factor=scale_factor
             )
-        return {"mask": mask, "semantics": semantic_label, "depth_image": depth_image}
+            
+        metadata["depth_image"] = depth_image    
+            
+        return metadata
     
     def _find_transform(self, image_path: Path) -> Union[Path, None]:
         while image_path.parent != image_path:
