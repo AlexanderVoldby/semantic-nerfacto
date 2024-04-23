@@ -60,16 +60,18 @@ class TetonNerfDataset(InputDataset):
             CONSOLE.print("[bold yellow] Extending LiDAR depth with Depth Anything!")
             depth_tensors = []
             repo = "LiheYoung/depth-anything-base-hf"
-            image_processor = AutoImageProcessor.from_pretrained(repo)
-            model = AutoModelForDepthEstimation.from_pretrained(repo)
-            for i, (image_filename, depth_filename, confidence_filename) in enumerate(tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames, self.confidence_filenames), desc="Generating depth images")):
-                pil_image = Image.open(image_filename)
-                depth_array = np.array(Image.open(depth_filename))
-                depth_tensor = torch.from_numpy(depth_array).float() * self.depth_unit_scale_factor # Divide by 1000 to scale to meters
-                confidence_array = np.array(Image.open(confidence_filename))
-                valid_mask = torch.from_numpy(confidence_array).int() == 255 # Only use 100% confident values 
-                inputs = image_processor(images=pil_image, return_tensors="pt")
-                with torch.no_grad():
+            
+            with torch.no_grad():
+                image_processor = AutoImageProcessor.from_pretrained(repo)
+                model = AutoModelForDepthEstimation.from_pretrained(repo)
+                for i, (image_filename, depth_filename, confidence_filename) in enumerate(tqdm(zip(dataparser_outputs.image_filenames, self.depth_filenames, self.confidence_filenames), desc="Generating depth images")):
+                    pil_image = Image.open(image_filename)
+                    depth_array = np.array(Image.open(depth_filename))
+                    depth_tensor = torch.from_numpy(depth_array).float() * self.depth_unit_scale_factor # Divide by 1000 to scale to meters
+                    confidence_array = np.array(Image.open(confidence_filename))
+                    valid_mask = torch.from_numpy(confidence_array).int() == 255 # Only use 100% confident values 
+                    inputs = image_processor(images=pil_image, return_tensors="pt")
+                    
                     outputs = model(**inputs)
                     predicted_depth = 1 / outputs.predicted_depth
                     predicted_depth = (predicted_depth - predicted_depth.min()) / (predicted_depth.max() - predicted_depth.min())
@@ -102,17 +104,13 @@ class TetonNerfDataset(InputDataset):
                             valid_mask,
                             saved_name
                         )
-
-
-                depth_tensors.append(depth)
+                    depth_tensors.append(depth)
                 
             self.depths = torch.stack(depth_tensors)
             np.save(cache, self.depths.cpu().numpy())
 
             # Delete some stuff to avoid exceeding GPU memory
-            del depth_tensors
-            del image_processor
-            del model
+            del depth_tensors, image_processor, model
             torch.cuda.empty_cache()
             gc.collect()
             self.depth_filenames = None
