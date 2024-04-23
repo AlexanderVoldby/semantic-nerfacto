@@ -10,31 +10,31 @@ import torch
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManager, VanillaDataManagerConfig
 
-from semantic_nerfacto.semantic_depth_dataset import SemanticDepthDataset
+from teton_nerf.semantic_depth_dataset import SemanticDepthDataset
 
 
 @dataclass
-class SemanticNerfactoDataManagerConfig(VanillaDataManagerConfig):
+class TetonNerfDatamanagerConfig(VanillaDataManagerConfig):
     """Creates the semantic depth dataset for semantic depth nerfacto
     """
     
-    _target: Type = field(default_factory=lambda: SemanticNerfactoDataManager)
+    _target: Type = field(default_factory=lambda: TetonNerfDatamanager)
     use_monocular_depth: bool = True
     """Whether to extend lidar depth with monocular depth"""
 
 
-class SemanticNerfactoDataManager(VanillaDataManager):
+class TetonNerfDatamanager(VanillaDataManager):
     """Template DataManager
 
     Args:
         config: the DataManagerConfig used to instantiate class
     """
 
-    config: SemanticNerfactoDataManagerConfig
+    config: TetonNerfDatamanagerConfig
 
     def __init__(
         self,
-        config: SemanticNerfactoDataManagerConfig,
+        config: TetonNerfDatamanagerConfig,
         device: Union[torch.device, str] = "cpu",
         test_mode: Literal["test", "val", "inference"] = "val",
         world_size: int = 1,

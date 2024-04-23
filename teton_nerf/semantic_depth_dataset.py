@@ -20,22 +20,24 @@ from nerfstudio.data.utils.data_utils import get_semantics_and_mask_tensors_from
 from nerfstudio.model_components import losses
 from nerfstudio.utils.rich_utils import CONSOLE
 
-from semantic_nerfacto.visualizations import compare_depth_and_image, visualize_depth_before_and_after_scaling
+from teton_nerf.visualizations import compare_depth_and_image, visualize_depth_before_and_after_scaling
 
 class SemanticDepthDataset(InputDataset):
     exclude_batch_keys_from_device = InputDataset.exclude_batch_keys_from_device + ["mask", "semantics", "depth_image"]
 
     def __init__(self, dataparser_outputs: DataparserOutputs, scale_factor: float = 1.0, use_monocular_depth= True):
         super().__init__(dataparser_outputs, scale_factor)
-        # assert "semantics" in dataparser_outputs.metadata.keys() and isinstance(self.metadata["semantics"], Semantics)
+        # TODO: Include flag that can avoid this if not using semantics
         self.semantics = self.metadata["semantics"]
-        self.mask_indices = torch.tensor(
-            [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
-        ).view(1, 1, -1)
+        if self.semantics is not None:
+            self.mask_indices = torch.tensor(
+                [self.semantics.classes.index(mask_class) for mask_class in self.semantics.mask_classes]
+            ).view(1, 1, -1)
+        
         self.use_monocular_depth = use_monocular_depth
 
         # Depth image handling
-        # TODO if depth images already exist from LiDAR, extend them with pretrained model
+        # TODO Skip all this if not using depth
         self.depth_filenames = self.metadata.get("depth_filenames")
         self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
         # if not self.depth_filenames:

@@ -13,15 +13,15 @@ import torch.distributed as dist
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from semantic_nerfacto.semantic_nerfacto_datamanager import SemanticNerfactoDataManagerConfig
-from semantic_nerfacto.semantic_depth_nerfacto import SemanticDepthNerfactoModel, SemanticDepthNerfactoModelConfig
-from semantic_nerfacto.utils.random_train_pose import random_train_pose
+from teton_nerf.semantic_nerfacto_datamanager import TetonNerfDatamanagerConfig
+from teton_nerf.semantic_depth_nerfacto import SemanticDepthNerfactoModel, SemanticDepthNerfactoModelConfig
+from teton_nerf.utils.random_train_pose import random_train_pose
 
 from nerfstudio.data.datamanagers.base_datamanager import (
     DataManager,
     DataManagerConfig,
 )
-from semantic_nerfacto.utils.random_train_pose import random_train_pose
+from teton_nerf.utils.random_train_pose import random_train_pose
 
 from nerfstudio.data.datamanagers.base_datamanager import (
     DataManager,
@@ -40,7 +40,7 @@ class SemanticDepthNerfactoPipelineConfig(VanillaPipelineConfig):
 
     _target: Type = field(default_factory=lambda: SemanticDepthNerfactoPipeline)
     """target class to instantiate"""
-    datamanager: DataManagerConfig = SemanticNerfactoDataManagerConfig()
+    datamanager: DataManagerConfig = TetonNerfDatamanagerConfig()
     """specifies the datamanager config"""
     model: ModelConfig = SemanticDepthNerfactoModelConfig()
     """specifies the model config"""

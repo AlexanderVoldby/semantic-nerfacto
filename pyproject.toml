@@ -1,5 +1,5 @@
 [project]
-name = "semantic_nerfacto"
+name = "teton_nerf"
 version = "0.1.1"
 
 dependencies = [
@@ -8,12 +8,9 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["semantic_nerfacto*"]
+include = ["teton_nerf*"]
 
 [project.entry-points.'nerfstudio.method_configs']
-semantic_nerfacto = 'semantic_nerfacto.semantic_nerfacto_config:semantic_nerfacto'
-semantic_depth_nerfacto = 'semantic_nerfacto.semantic_nerfacto_config:semantic_depth_nerfacto'
-
-# Custom dataparser causes circular import
-# [project.entry-points.'nerfstudio.dataparser_configs']
-# semantic_dataparser = 'semantic_nerfacto.semantic_nerfacto_config:semantic_dataparser'
+semantic_nerfacto = 'semantic_nerfacto.teton_nerf_config:semantic_nerfacto'
+semantic_depth_nerfacto = 'semantic_nerfacto.teton_nerf_config:semantic_depth_nerfacto'
+teton_nerf = 'semantic_nerfacto.teton_nerf_config:teton_nerf'

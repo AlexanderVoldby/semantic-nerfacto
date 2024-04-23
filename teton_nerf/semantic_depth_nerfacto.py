@@ -10,11 +10,11 @@ from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.utils import colormaps
 from nerfstudio.model_components import losses
 
-from semantic_nerfacto.semantic_nerfacto import SemanticNerfactoModel, SemanticNerfactoModelConfig
+from teton_nerf.semantic_nerfacto import SemanticNerfactoModel, SemanticNerfactoModelConfig
 
 @dataclass
 class SemanticDepthNerfactoModelConfig(SemanticNerfactoModelConfig):
-    # Combine configurations of both models
+    
     _target: Type = field(default_factory=lambda: SemanticDepthNerfactoModel)
     depth_loss_mult: float = 1e-3
     is_euclidean_depth: bool = False

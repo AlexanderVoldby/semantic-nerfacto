@@ -32,8 +32,6 @@ MAX_AUTO_RESOLUTION = 1600
 
 @dataclass
 class SemanticDataParserConfig(NerfstudioDataParserConfig):
-    # Config file for the semantic dataparser. It should already have all the functionality of the 
-    # Nerfstudio dataparser so just sesmantics need to be added
     
     _target: Type = field(default_factory=lambda: SemanticNerf)
     """target class to instantiate"""
@@ -45,7 +43,6 @@ class SemanticDataParserConfig(NerfstudioDataParserConfig):
 class SemanticNerf(Nerfstudio):
     
     config: SemanticDataParserConfig
-    
     
     def _generate_dataparser_outputs(self, split="train"):
         assert self.config.data.exists(), f"Data directory {self.config.data} does not exist."
@@ -377,6 +374,7 @@ class SemanticNerf(Nerfstudio):
         segmentations_folder = "segmentations"
 
         # --- semantics ---
+        semantics = None
         if self.config.include_semantics:
 
             filenames = [
