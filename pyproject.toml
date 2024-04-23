@@ -12,3 +12,7 @@ include = ["teton_nerf*"]
 
 [project.entry-points.'nerfstudio.method_configs']
 teton_nerf = 'teton_nerf.teton_nerf_config:teton_nerf'
+
+[project.scripts]
+# Custom process-data script to include confidence maps when processing polycam data
+ns-process-teton = "teton_nerf.process_data.process_polycam: entrypoint"

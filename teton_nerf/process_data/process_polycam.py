@@ -12,11 +12,11 @@ from nerfstudio.process_data import polycam_utils
 
 from nerfstudio.process_data.colmap_converter_to_nerfstudio_dataset import BaseConverterToNerfstudioDataset
 from nerfstudio.utils.rich_utils import CONSOLE
-from teton_nerf.process_data.polycam_confidence_utils import process_confidence_maps
+from teton_nerf.process_data.polycam_confidence_utils import process_confidence_maps, polycam_confidence_to_json
 
 
 @dataclass
-class ProcessPolycam(BaseConverterToNerfstudioDataset):
+class ProcessPolycamConfidence(BaseConverterToNerfstudioDataset):
     """Process Polycam data into a nerfstudio dataset.
 
     To capture data, use the Polycam app on an iPhone or iPad with LiDAR. The capture must be in LiDAR or ROOM mode.
@@ -74,8 +74,12 @@ class ProcessPolycam(BaseConverterToNerfstudioDataset):
             raise ValueError(f"Image directory {polycam_image_dir} doesn't exist")
 
         if not (self.data / "keyframes" / "depth").exists():
-            depth_dir = self.data / "keyframes" / "depth"
-            raise ValueError(f"Depth map directory {depth_dir} doesn't exist")
+            confidence_dir = self.data / "keyframes" / "depth"
+            raise ValueError(f"Depth map directory {confidence_dir} doesn't exist")
+        
+        if not (self.data / "keyframes" / "confidence").exists() and self.use_confidence:
+            confidence_dir = self.data / "keyframes" / "confidence"
+            raise ValueError(f"Confidence map directory {confidence_dir} doesn't exist")
 
         (image_processing_log, polycam_image_filenames) = polycam_utils.process_images(
             polycam_image_dir,
@@ -91,11 +95,11 @@ class ProcessPolycam(BaseConverterToNerfstudioDataset):
         polycam_depth_filenames = []
         if self.use_depth:
             polycam_depth_image_dir = self.data / "keyframes" / "depth"
-            depth_dir = self.output_dir / "depth"
-            depth_dir.mkdir(parents=True, exist_ok=True)
+            confidence_dir = self.output_dir / "depth"
+            confidence_dir.mkdir(parents=True, exist_ok=True)
             (depth_processing_log, polycam_depth_filenames) = polycam_utils.process_depth_maps(
                 polycam_depth_image_dir,
-                depth_dir,
+                confidence_dir,
                 num_processed_images=len(polycam_image_filenames),
                 crop_border_pixels=self.crop_border_pixels,
                 max_dataset_size=self.max_dataset_size,
@@ -104,14 +108,14 @@ class ProcessPolycam(BaseConverterToNerfstudioDataset):
             )
             summary_log.extend(depth_processing_log)
         
-        polycam_confidence_flenames = []
+        polycam_confidence_filenames = []
         if self.use_confidence:
             polycam_depth_image_dir = self.data / "keyframes" / "confidence"
-            depth_dir = self.output_dir / "confidence"
-            depth_dir.mkdir(parents=True, exist_ok=True)
-            (confidence_processing_log, polycam_confidence_filenames) = polycam_utils.process_depth_maps(
+            confidence_dir = self.output_dir / "confidence"
+            confidence_dir.mkdir(parents=True, exist_ok=True)
+            (confidence_processing_log, polycam_confidence_filenames) = process_confidence_maps(
                 polycam_depth_image_dir,
-                depth_dir,
+                confidence_dir,
                 num_processed_images=len(polycam_image_filenames),
                 crop_border_pixels=self.crop_border_pixels,
                 max_dataset_size=self.max_dataset_size,
@@ -121,9 +125,10 @@ class ProcessPolycam(BaseConverterToNerfstudioDataset):
             summary_log.extend(confidence_processing_log)
             
         summary_log.extend(
-            polycam_utils.polycam_to_json(
+            polycam_confidence_to_json(
                 image_filenames=polycam_image_filenames,
                 depth_filenames=polycam_depth_filenames,
+                confidence_filenames=polycam_confidence_filenames,
                 cameras_dir=polycam_cameras_dir,
                 output_dir=self.output_dir,
                 min_blur_score=self.min_blur_score,
@@ -136,3 +141,52 @@ class ProcessPolycam(BaseConverterToNerfstudioDataset):
         for summary in summary_log:
             CONSOLE.print(summary, justify="center")
         CONSOLE.rule()
+
+@dataclass
+class NotInstalled:
+    def main(self) -> None:
+        ...
+       
+Commands = Union[
+    Annotated[ProcessPolycamConfidence, tyro.conf.subcommand(name="polycam")]
+]
+
+# Add aria subcommand if projectaria_tools is installed.
+try:
+    import projectaria_tools
+except ImportError:
+    projectaria_tools = None
+
+if projectaria_tools is not None:
+    from nerfstudio.scripts.datasets.process_project_aria import ProcessProjectAria
+
+    # Note that Union[A, Union[B, C]] == Union[A, B, C].
+    Commands = Union[Commands, Annotated[ProcessProjectAria, tyro.conf.subcommand(name="aria")]]
+else:
+    Commands = Union[
+        Commands,
+        Annotated[
+            NotInstalled,
+            tyro.conf.subcommand(
+                name="aria",
+                description="**Not installed.** Processing Project Aria data requires `pip install projectaria_tools'[all]'`.",
+            ),
+        ],
+    ]
+        
+def entrypoint():
+    """Entrypoint for use with pyproject scripts."""
+    tyro.extras.set_accent_color("bright_yellow")
+    try:
+        tyro.cli(Commands).main()
+    except RuntimeError as e:
+        CONSOLE.log("[bold red]" + e.args[0])
+
+
+if __name__ == "__main__":
+    entrypoint()
+
+
+def get_parser_fn():
+    """Get the parser function for the sphinx docs."""
+    return tyro.extras.get_parser(Commands)  # type: ignore
