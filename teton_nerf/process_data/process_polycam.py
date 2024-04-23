@@ -1,10 +1,7 @@
-import sys
 import zipfile
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Union
 
-import numpy as np
 import tyro
 from typing_extensions import Annotated
 
@@ -41,11 +38,11 @@ class ProcessPolycamConfidence(BaseConverterToNerfstudioDataset):
     """Minimum blur score to use an image. If the blur score is below this value, the image will be skipped."""
     crop_border_pixels: int = 15
     """Number of pixels to crop from each border of the image. Useful as borders may be black due to undistortion."""
-    use_depth: bool = False
+    use_depth: bool = True
     """If True, processes the generated depth maps from Polycam"""
-    use_confidence: bool = False
+    use_confidence: bool = True
     """If True, processes the generated confidence maps for the depth maps"""
-    add_semantics: bool = False
+    add_semantics: bool = True
     """If True, adds semantic segmentation to the dataset using pretrained detectron2 model"""
 
     def main(self) -> None:
