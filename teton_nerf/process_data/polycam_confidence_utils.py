@@ -96,11 +96,11 @@ def process_confidence_maps(
     verbose: bool = True,
 ) -> Tuple[List[str], List[Path]]:
     """
-    Process Depth maps from polycam only
+    Process confidence maps from polycam only
 
     Args:
-        polycam_depth_dir: Path to the directory containing depth maps
-        depth_dir: Output directory for processed depth maps
+        polycam_confidence_dir: Path to the directory containing confidence maps
+        confidence_dir: Output directory for processed confidence maps
         num_processed_images: Number of RGB processed that must match the number of depth maps
         crop_border_pixels: Number of pixels to crop from each border of the image. Useful as borders may be
                             black due to undistortion.
@@ -111,7 +111,7 @@ def process_confidence_maps(
         verbose: If True, print extra logging.
     Returns:
         summary_log: Summary of the processing.
-        polycam_depth_maps_filenames: List of processed depth maps paths
+        polycam_confidence_maps_filenames: List of processed confidence maps paths
     """
     summary_log = []
     polycam_confidence_maps_filenames, num_orig_confidence_maps = process_data_utils.get_image_filenames(

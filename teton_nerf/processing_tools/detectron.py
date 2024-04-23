@@ -40,8 +40,7 @@ class SemanticSegmentor():
     def predict(self, image):
         panoptic_seg, segments_info = self.predictor(image)["panoptic_seg"]
         # We are doing semantic segmentation so we simply want to map the panoptic ID to a class ID:
-        panoptic_seg = panoptic_seg.cpu().numpy()
-        semantic_seg = panoptic_seg.copy()
+        semantic_seg = panoptic_seg.cpu().numpy().copy()
         for info in segments_info:
             try:
                 if info["isthing"]:
@@ -53,10 +52,16 @@ class SemanticSegmentor():
         return semantic_seg, panoptic_seg, segments_info
     
     def visualize(self, image, panoptic_segmentation, segments_info, filename):
-        v = Visualizer(image[:, :, ::-1], MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0]), scale=1.2)
+        metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0])
+        v = Visualizer(image[:, :, ::-1], metadata, scale=1.2)
         out = v.draw_panoptic_seg_predictions(panoptic_segmentation.to("cpu"), segments_info)
-        cv2.imwrite(f"{filename.strip('.png')}_segmentation.png", out.get_image()[:, :, ::-1])
-        # cv2.imshow(out.get_image()[:, :, ::-1])
+        # Convert from RGB (if needed) to BGR for OpenCV
+        output_image = out.get_image()[:, :, ::-1]
+        full_path = f"{filename.replace('.png', '')}_segmentation.jpg"
+        success = cv2.imwrite(full_path, output_image)
+        
+        return success
+
         
     def save_metadata(self, data):
         metadict = {
@@ -101,10 +106,12 @@ class SemanticSegmentor():
                 semantic_segmentation, panoptic_segmentation, segments_info = self.predict(image)
                 base_name = os.path.basename(image_file).replace(".jpg", ".png")
                 visualization_file_path = os.path.join(visualization_folder_path, base_name)
-                segmentation_file_path = Path(segmentation_folder_path / base_name)
+                # Use Pathlib to support Nerfstudio conventions
+                segmentation_file_path = Path(segmentation_folder_path) / Path(base_name)
                 segmentation_filenames.append(segmentation_file_path)
-                cv2.imwrite(segmentation_file_path, semantic_segmentation)
-                self.visualize(image, panoptic_segmentation, segments_info, visualization_file_path)
+                cv2.imwrite(str(segmentation_file_path), semantic_segmentation)
+                if suffix == '':
+                    self.visualize(image, panoptic_segmentation, segments_info, visualization_file_path)
 
         # Add panoptic_classes.json to dataset
         self.save_metadata(data)
