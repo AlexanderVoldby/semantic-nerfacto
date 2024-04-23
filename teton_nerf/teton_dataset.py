@@ -111,6 +111,8 @@ class TetonNerfDataset(InputDataset):
 
             # Delete some stuff to avoid exceeding GPU memory
             del depth_tensors
+            del image_processor
+            del model
             torch.cuda.empty_cache()
             gc.collect()
             self.depth_filenames = None
