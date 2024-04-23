@@ -11,6 +11,4 @@ dependencies = [
 include = ["teton_nerf*"]
 
 [project.entry-points.'nerfstudio.method_configs']
-semantic_nerfacto = 'teton_nerf.teton_nerf_config:semantic_nerfacto'
-semantic_depth_nerfacto = 'teton_nerf.teton_nerf_config:semantic_depth_nerfacto'
 teton_nerf = 'teton_nerf.teton_nerf_config:teton_nerf'

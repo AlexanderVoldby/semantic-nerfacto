@@ -13,7 +13,7 @@ import torch.distributed as dist
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from teton_nerf.semantic_nerfacto_datamanager import TetonNerfDatamanagerConfig
+from teton_nerf.teton_datamanager import TetonNerfDatamanagerConfig
 from teton_nerf.teton_nerf import TetonNerfModel, TetonNerfModelConfig
 from teton_nerf.utils.random_train_pose import random_train_pose
 
