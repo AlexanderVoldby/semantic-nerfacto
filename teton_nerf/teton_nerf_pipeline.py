@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, List, Literal, Tuple, Type
 from torchtyping import TensorType
 import torch
+import numpy as np
 
 import torch.distributed as dist
 from torch.cuda.amp.grad_scaler import GradScaler
@@ -16,12 +17,12 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from teton_nerf.teton_datamanager import TetonNerfDatamanagerConfig
 from teton_nerf.teton_nerf import TetonNerfModel, TetonNerfModelConfig
 from teton_nerf.utils.random_train_pose import random_train_pose
+from teton_nerf.utils.get_pointcloud import generate_pointcloud
 
 from nerfstudio.data.datamanagers.base_datamanager import (
     DataManager,
     DataManagerConfig,
 )
-from teton_nerf.utils.random_train_pose import random_train_pose
 
 from nerfstudio.viewer.control_panel import ViewerCheckbox
 from nerfstudio.data.datamanagers.base_datamanager import (
@@ -118,15 +119,35 @@ class TetonNerfPipeline(VanillaPipeline):
 
         # Stuff to visualize pointcloud in viewer
         
-        # here is the current __init__ function. # add this to the end of the init function of the pipeline. self.show_pcd_button = ViewerCheckbox("Show Point Cloud", False, cb_hook=self.add_point_clouds)
+        # here is the current __init__ function. # add this to the end of the init function of the pipeline.
+        self.show_pcd_button = ViewerCheckbox("Show Point Cloud", False, cb_hook=self.add_point_clouds)
 
-        def add_point_clouds(self, checkbox: ViewerCheckbox):
-        # TODO: add point cloud time the viewer
+    def add_point_clouds(self, checkbox: ViewerCheckbox):
+        # TODO: add point cloud to the viewer
         # take the depth images and backproject them to 3D points
+        
+        dataset = self.datamanager.tran_dataset
+        indices = np.linspace(0, len(dataset) - 1, len(dataset), dtype=np.int32).tolist()
+        
+            
+        
         if checkbox.value:
-        pass
+            for i in indices:
+                points_world, colors = generate_pointcloud(dataset, i)
+                
+                # How to add to server?
+                # frame_nodes.append(server.add_frame(f"/frames/t{i}", show_axes=False))
+
+                # Place the point cloud in the frame.
+                checkbox.viser_server.add_point_cloud(
+                    name=f"/frames/t{i}/point_cloud",
+                    points=points_world,
+                    colors=colors,
+                    point_size=0.01,
+                    point_shape="rounded",
+                )
         else:
-        pass
+            pass
 
     
     # TODO: Add stuff that visualizes the patches
