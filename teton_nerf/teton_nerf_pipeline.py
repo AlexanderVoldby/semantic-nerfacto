@@ -17,13 +17,14 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from teton_nerf.teton_datamanager import TetonNerfDatamanagerConfig
 from teton_nerf.teton_nerf import TetonNerfModel, TetonNerfModelConfig
 from teton_nerf.utils.random_train_pose import random_train_pose
-from teton_nerf.utils.get_pointcloud import generate_pointcloud
+from teton_nerf.utils.get_pointcloud import generate_pointcloud, generate_pointcloud_advanced
 
 from nerfstudio.data.datamanagers.base_datamanager import (
     DataManager,
     DataManagerConfig,
 )
 
+from nerfstudio.viewer.viewer_elements import ViewerControl
 from nerfstudio.viewer.control_panel import ViewerCheckbox
 from nerfstudio.data.datamanagers.base_datamanager import (
     DataManager,
@@ -121,27 +122,24 @@ class TetonNerfPipeline(VanillaPipeline):
         
         # here is the current __init__ function. # add this to the end of the init function of the pipeline.
         self.show_pcd_button = ViewerCheckbox("Show Point Cloud", False, cb_hook=self.add_point_clouds)
-
+        self.viewer_control = ViewerControl() # This will be found and _setup by viewer
+        
     def add_point_clouds(self, checkbox: ViewerCheckbox):
         # TODO: add point cloud to the viewer
         # take the depth images and backproject them to 3D points
         
-        dataset = self.datamanager.tran_dataset
-        indices = np.linspace(0, len(dataset) - 1, len(dataset), dtype=np.int32).tolist()
-        
-            
+        dataset = self.datamanager.train_dataset
+        points_and_colors = generate_pointcloud_advanced(dataset)
+        indices = range(0, len(dataset), 10) # Try every 5th image to reduce clutter 
+        print(f"Checkbox status: {checkbox.value}")
         
         if checkbox.value:
             for i in indices:
-                points_world, colors = generate_pointcloud(dataset, i)
-                
-                # How to add to server?
-                # frame_nodes.append(server.add_frame(f"/frames/t{i}", show_axes=False))
-
-                # Place the point cloud in the frame.
-                checkbox.viser_server.add_point_cloud(
+                points, colors = points_and_colors[i]
+                print(f"Points shape after extracting: {points.shape}")
+                self.viewer_control.viser_server.add_point_cloud(
                     name=f"/frames/t{i}/point_cloud",
-                    points=points_world,
+                    points=points,
                     colors=colors,
                     point_size=0.01,
                     point_shape="rounded",
