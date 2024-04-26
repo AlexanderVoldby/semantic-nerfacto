@@ -4,7 +4,10 @@ Template DataManager
 
 from dataclasses import dataclass, field
 from typing import Dict, Literal, Tuple, Type, Union
-
+from jaxtyping import Float, UInt8
+from PIL import Image
+import numpy as np
+import numpy.typing as npt
 import torch
 
 from nerfstudio.cameras.rays import RayBundle
@@ -68,3 +71,20 @@ class TetonNerfDatamanager(VanillaDataManager):
             dataparser_outputs=self.dataparser.get_dataparser_outputs(split=self.test_split),
             scale_factor=self.config.camera_res_scale_factor,
             use_monocular_depth=self.config.use_monocular_depth)
+    
+    def get_numpy_depth(self, image_idx: int) -> npt.NDArray[np.float32]:
+        """Returns the image of shape (H, W, 3 or 4).
+
+        Args:
+            image_idx: The image index in the dataset.
+        """
+        depth_filename = self.metadata.depth_filenames[image_idx]
+        pil_image = Image.open(depth_filename)
+        if self.scale_factor != 1.0:
+            width, height = pil_image.size
+            newsize = (int(width * self.scale_factor), int(height * self.scale_factor))
+            pil_image = pil_image.resize(newsize, resample=Image.BILINEAR)
+        depth = np.array(pil_image, dtype="float32")  # shape is (h, w) or (h, w, 3 or 4)
+        assert len(depth.shape) == 2
+        assert depth.dtype == np.float32
+        return depth

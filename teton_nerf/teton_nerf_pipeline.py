@@ -23,6 +23,7 @@ from nerfstudio.data.datamanagers.base_datamanager import (
 )
 from teton_nerf.utils.random_train_pose import random_train_pose
 
+from nerfstudio.viewer.control_panel import ViewerCheckbox
 from nerfstudio.data.datamanagers.base_datamanager import (
     DataManager,
     DataManagerConfig,
@@ -115,6 +116,19 @@ class TetonNerfPipeline(VanillaPipeline):
             )
             dist.barrier(device_ids=[local_rank])
 
+        # Stuff to visualize pointcloud in viewer
+        
+        # here is the current __init__ function. # add this to the end of the init function of the pipeline. self.show_pcd_button = ViewerCheckbox("Show Point Cloud", False, cb_hook=self.add_point_clouds)
+
+        def add_point_clouds(self, checkbox: ViewerCheckbox):
+        # TODO: add point cloud time the viewer
+        # take the depth images and backproject them to 3D points
+        if checkbox.value:
+        pass
+        else:
+        pass
+
+    
     # TODO: Add stuff that visualizes the patches
     def apply_regnerf_loss(self, step: int, patches_density: TensorType["num_patches", "res", "res"]):
         pd = patches_density
