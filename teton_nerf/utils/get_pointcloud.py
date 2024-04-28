@@ -10,46 +10,6 @@ import numpy.typing as onpt
 import skimage.transform
 from nerfstudio.data.utils.data_utils import get_depth_image_from_path
 
-@dataclasses.dataclass
-class Record3dFrame:
-    """Inspiration for the method"""
-
-    K: onpt.NDArray[onp.float32]
-    rgb: onpt.NDArray[onp.uint8]
-    depth: onpt.NDArray[onp.float32]
-    mask: onpt.NDArray[onp.bool_]
-    T_world_camera: onpt.NDArray[onp.float32]
-
-    def get_point_cloud(self,
-        downsample_factor: int = 1
-    ) -> Tuple[onpt.NDArray[onp.float32], onpt.NDArray[onp.uint8]]:
-        rgb = self.rgb[::downsample_factor, ::downsample_factor]
-        depth = skimage.transform.resize(self.depth, rgb.shape[:2], order=0)
-        mask = cast(
-            onpt.NDArray[onp.bool_],
-            skimage.transform.resize(self.mask, rgb.shape[:2], order=0),
-        )
-        assert depth.shape == rgb.shape[:2]
-
-        K = self.K
-        T_world_camera = self.T_world_camera
-
-        img_wh = rgb.shape[:2][::-1]
-
-        grid = (
-            np.stack(np.meshgrid(np.arange(img_wh[0]), np.arange(img_wh[1])), 2) + 0.5
-        )
-        grid = grid * downsample_factor
-
-        homo_grid = np.pad(grid[mask], np.array([[0, 0], [0, 1]]), constant_values=1)
-        local_dirs = np.einsum("ij,bj->bi", np.linalg.inv(K), homo_grid)
-        dirs = np.einsum("ij,bj->bi", T_world_camera[:3, :3], local_dirs)
-        points = (T_world_camera[:, -1] + dirs * depth[mask, None]).astype(np.float32)
-        point_colors = rgb[mask]
-
-        return points, point_colors
-    
-
 import numpy as np
 import torch
 
@@ -60,10 +20,15 @@ def generate_pointcloud(dataset, skip_interval=10):
     for idx in range(len(dataset)):
         image_tensor = dataset[idx]["image"]  # Assuming this retrieves an RGB image tensor
         camera = dataset.cameras[idx]
-        depth = dataset.depths[idx]  # Assuming a method that handles loading and any necessary scaling
+        if "depths" in dir(dataset):
+            depth = dataset.depths[idx] * 1e3  # Multiply to return to original scale
+        else:
+            filename = dataset.metadata["depth_filenames"][idx]
+            depth = get_depth_image_from_path(filename)
+            depth *= 1e3
         
         depth_np = depth.cpu().numpy().astype('float32')
-        image_np = image_tensor.cpu().numpy().astype(np.uint8) # .transpose(1, 2, 0)  # Correctly orient the image
+        image_np = image_tensor.cpu().numpy().astype(np.uint8)
 
         mask = np.zeros_like(depth_np, dtype=bool)
         mask[::skip_interval, ::skip_interval] = True
@@ -115,7 +80,7 @@ def generate_pointcloud_advanced(dataset, downsample_factor=1):
         camera = dataset.cameras[idx]
         depth = dataset.depths[idx]  # Assuming a method that handles loading and any necessary scaling
         
-        depth_np = depth.cpu().numpy().astype('float32')
+        depth_np = depth.cpu().numpy().astype('float32') * 1e3 # Scale to return to original NS scale
         image_np = image_tensor.cpu().numpy().astype(np.uint8) # .transpose(1, 2, 0)  # Correctly orient the image
 
         mask = np.zeros_like(depth_np, dtype=bool)

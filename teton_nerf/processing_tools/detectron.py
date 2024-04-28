@@ -26,14 +26,15 @@ class SemanticSegmentor():
         self.cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml")
         
         # Reduce the number of classes the model is using
-        expected_things = ["chair", "couch", "bed", "dining table", "toilet", "tv"]
+        self.expected_classes = {"curtain", "door-stuff", "mirror-stuff", "pillow", "shelf", "stairs",
+                            "table", "window", "ceiling", "floor", "wall", "rug",
+                          "chair", "couch", "bed", "dining table", "toilet", "tv"}
         
-        expected_stuff = ["blanket","curtain", "door-stuff", "floor-wood",
-                          "mirror-stuff", "pillow", "shelf", "stairs",
-                          "wall-brick", "table", "window", "ceiling", "floor", "wall", "rug"]
-        
+        # self.cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(expected_stuff) + len(expected_things)
+        # self.metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0]).set(thing_classes=expected_things, stuff_classes=expected_stuff)
         self.metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0])
         self.predictor = DefaultPredictor(self.cfg)
+        self.idx_to_class = {i+1: c for i, c in enumerate(self.metadata.thing_classes + self.metadata.stuff_classes)}
         self.num_things = len(self.metadata.thing_classes)
         self.num_stuff = len(self.metadata.stuff_classes)
         
@@ -42,13 +43,13 @@ class SemanticSegmentor():
         # We are doing semantic segmentation so we simply want to map the panoptic ID to a class ID:
         semantic_seg = panoptic_seg.cpu().numpy().copy()
         for info in segments_info:
-            try:
+            if self.idx_to_class[info["category_id"]] in self.expected_classes:
                 if info["isthing"]:
                     semantic_seg[semantic_seg == info["id"]] = info["category_id"]
                 else:
                     semantic_seg[semantic_seg == info["id"]] = info["category_id"] + self.num_things
-            except Exception as e:
-                print(f"Error: {e}")
+            else:
+                semantic_seg[semantic_seg == info["id"]] = 0
         return semantic_seg, panoptic_seg, segments_info
     
     def visualize(self, image, panoptic_segmentation, segments_info, filename):
@@ -62,7 +63,6 @@ class SemanticSegmentor():
         
         return success
 
-        
     def save_metadata(self, data):
         metadict = {
             "thing_classes": self.metadata.thing_classes,
@@ -128,4 +128,3 @@ def main(data):
 
 if __name__ == "__main__":
     main()
-    
