@@ -1,2 +1,4 @@
 data/*
 outputs/*
+teton_nerf/processing_tools/credentials.json
+teton_nerf/processing_tools/token.json
