@@ -83,8 +83,8 @@ class TetonNerfDataset(InputDataset):
                     )
                     prediction = prediction.squeeze()
                     # Fit the predicted_depth to the LiDAR depth
-                    scale, shift = self.compute_scale_shift(prediction, depth_tensor)
-                    depth  = scale * prediction + shift
+                    scale, shift = self.compute_scale_shift(prediction, depth_tensor, valid_mask)
+                    depth = scale * prediction + shift
                     # Convert to LiDAR depth where the depth is confident
                     depth[valid_mask] = depth_tensor[valid_mask]
                     
@@ -123,12 +123,12 @@ class TetonNerfDataset(InputDataset):
             with open(json_name, "w") as outfile: 
                 json.dump(itd, outfile)
 
-    def compute_scale_shift(self, monocular_depth, lidar_depth):
+    def compute_scale_shift(self, monocular_depth, lidar_depth, mask):
 
-        scaled_monocular = monocular_depth.flatten()
-        lidar_depth_flat = lidar_depth.flatten()
+        monocular_flat = monocular_depth[mask].flatten()
+        lidar_depth_flat = lidar_depth[mask].flatten()
 
-        slope, intercept, r_value, p_value, std_err = linregress(scaled_monocular.numpy(), lidar_depth_flat.numpy())
+        slope, intercept, r_value, p_value, std_err = linregress(monocular_flat.numpy(), lidar_depth_flat.numpy())
         return slope, intercept
 
     def get_metadata(self, data: Dict) -> Dict:
