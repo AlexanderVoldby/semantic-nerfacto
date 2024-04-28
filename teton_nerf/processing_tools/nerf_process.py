@@ -10,8 +10,9 @@ class NeRFProcess:
         self.global_env = global_env
 
     def process_data(self, path: str, output: str):
-        process_path ="~/Desktop/Bachelorprojekt/nerfstudio/nerfstudio/scripts/process_data.py"
-        process = subprocess.run([f"{self.global_env} {process_path} polycam --data {path} --output_dir {output} --use-depth"], shell=True)
+        # process_path ="~/Desktop/Bachelorprojekt/nerfstudio/nerfstudio/scripts/process_data.py"
+        process_path = "~/Desktop/Bachelorprojekt/nerfstudio/teton_nerf/teton_nerf/process_data/process_polycam.py"
+        process = subprocess.run([f"{self.global_env} {process_path} polycam --data {path} --output_dir {output}"], shell=True)
         self.assert_process(process)
         return process
 
