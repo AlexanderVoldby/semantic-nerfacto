@@ -198,11 +198,9 @@ class TetonNerfModel(NerfactoModel):
         
         # semantic loss
         semantics_pred = outputs["semantics"]
-        print(f"semantics prediction shape: {semantics_pred.shape}")
-        semantics_gt = batch["semantics"][..., 0].long().to(self.device)
-        print(f"Ground truth semantics shape: {semantics_gt.shape}")      
+        semantics_gt = batch["semantics"][..., 0].long().to(self.device)    
         valid_mask = semantics_gt != 0 # 0 is the null class so no supervision on these
-        print(f"Non-zero elements: {torch.sum(valid_mask)}")
+        #TODO: Consider whether adding masks on the semantics is a good idea
         
         if self.config.use_semantics:
             loss_dict["semantics_loss"] = self.config.semantic_loss_weight * self.cross_entropy_loss(

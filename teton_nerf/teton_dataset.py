@@ -124,11 +124,17 @@ class TetonNerfDataset(InputDataset):
                 json.dump(itd, outfile)
 
     def compute_scale_shift(self, monocular_depth, lidar_depth, mask):
-
         monocular_flat = monocular_depth[mask].flatten()
         lidar_depth_flat = lidar_depth[mask].flatten()
 
-        slope, intercept, r_value, p_value, std_err = linregress(monocular_flat.numpy(), lidar_depth_flat.numpy())
+        try:
+            slope, intercept, r_value, p_value, std_err = linregress(monocular_flat.numpy(), lidar_depth_flat.numpy())
+        except Exception as e:
+            print("Something went wrong, using just LiDAR depth")
+            print(f"Valid entries in mask: {torch.sum(mask)}")
+            slope = 1
+            intercept = 0
+        
         return slope, intercept
 
     def get_metadata(self, data: Dict) -> Dict:

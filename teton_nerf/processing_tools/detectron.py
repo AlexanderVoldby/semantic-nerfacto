@@ -27,7 +27,7 @@ class SemanticSegmentor():
         
         # Reduce the number of classes the model is using
         self.expected_classes = {"curtain", "door-stuff", "mirror-stuff", "pillow", "shelf", "stairs",
-                            "table", "window", "ceiling", "floor", "wall", "rug",
+                            "table", "window", "ceiling", "floor", "floor-wood" "wall", "rug",
                           "chair", "couch", "bed", "dining table", "toilet", "tv"}
         
         # self.cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(expected_stuff) + len(expected_things)

@@ -17,7 +17,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from teton_nerf.teton_datamanager import TetonNerfDatamanagerConfig
 from teton_nerf.teton_nerf import TetonNerfModel, TetonNerfModelConfig
 from teton_nerf.utils.random_train_pose import random_train_pose
-from teton_nerf.utils.get_pointcloud import generate_pointcloud, generate_pointcloud_advanced
+from teton_nerf.utils.get_pointcloud import generate_pointcloud, generate_point_cloud, generate_pointcloud_advanced
 
 from nerfstudio.data.datamanagers.base_datamanager import (
     DataManager,
@@ -117,10 +117,8 @@ class TetonNerfPipeline(VanillaPipeline):
                 TetonNerfModel, DDP(self._model, device_ids=[local_rank], find_unused_parameters=True)
             )
             dist.barrier(device_ids=[local_rank])
-
+            
         # Stuff to visualize pointcloud in viewer
-        
-        # here is the current __init__ function. # add this to the end of the init function of the pipeline.
         self.show_pcd_button = ViewerCheckbox("Show Point Cloud", False, cb_hook=self.add_point_clouds)
         self.viewer_control = ViewerControl() # This will be found and _setup by viewer
         
@@ -128,22 +126,27 @@ class TetonNerfPipeline(VanillaPipeline):
         # TODO: add point cloud to the viewer
         # take the depth images and backproject them to 3D points
         
-        dataset = self.datamanager.train_dataset
-        points_and_colors = generate_pointcloud_advanced(dataset)
-        indices = range(0, len(dataset), 10) # Try every 5th image to reduce clutter 
-        print(f"Checkbox status: {checkbox.value}")
+        pcd = generate_point_cloud(pipeline=self, bounding_box_min=(-1, -1, -1), bounding_box_max=(1, 1, 1))
+
+        colors = np.asarray(pcd.colors)
+        points = np.asarray(pcd.points)
+        poses = np.eye(4, dtype=np.float32)[None, ...].repeat(points.shape[0], axis=0)[:, :3, :]
+        poses[:, :3, 3] = points
+        poses = self.datamanager.train_dataparser_outputs.transform_poses_to_original_space(
+            torch.from_numpy(poses)
+        )
+        points = poses[:, :3, 3].numpy()
+
+        torch.cuda.empty_cache()
         
         if checkbox.value:
-            for i in indices:
-                points, colors = points_and_colors[i]
-                print(f"Points shape after extracting: {points.shape}")
-                self.viewer_control.viser_server.add_point_cloud(
-                    name=f"/frames/t{i}/point_cloud",
-                    points=points,
-                    colors=colors,
-                    point_size=0.01,
-                    point_shape="rounded",
-                )
+            self.viewer_control.viser_server.add_point_cloud(
+                name="point_cloud",
+                points=points,
+                colors=colors,
+                point_size=0.01,
+                point_shape="rounded",
+            )
         else:
             pass
 
@@ -215,3 +218,5 @@ class TetonNerfPipeline(VanillaPipeline):
             loss_dict["regnerf_semantics_loss"] = self.config.regnerf_semantics_loss_mult * regnerf_loss
         
         return model_outputs, loss_dict, metrics_dict
+    
+    
