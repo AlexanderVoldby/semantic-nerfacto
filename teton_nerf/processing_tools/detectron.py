@@ -34,8 +34,8 @@ class SemanticSegmentor():
         # self.metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0]).set(thing_classes=expected_things, stuff_classes=expected_stuff)
         self.metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0])
         self.predictor = DefaultPredictor(self.cfg)
-        self.idx_to_class = {i+1: c for i, c in enumerate(self.metadata.thing_classes + self.metadata.stuff_classes)}
-        self.num_things = len(self.metadata.thing_classes)
+        self.idx_to_class = {i: c for i, c in enumerate(self.metadata.thing_classes + self.metadata.stuff_classes)}
+        self.num_things = len(self.metadata.thing_classes) + 1
         self.num_stuff = len(self.metadata.stuff_classes)
         
     def predict(self, image):
@@ -45,9 +45,9 @@ class SemanticSegmentor():
         for info in segments_info:
             if self.idx_to_class[info["category_id"]] in self.expected_classes:
                 if info["isthing"]:
-                    semantic_seg[semantic_seg == info["id"]] = info["category_id"]
+                    semantic_seg[semantic_seg == info["id"]] = info["category_id"] + 1 # Add 1 to make room for 0 class
                 else:
-                    semantic_seg[semantic_seg == info["id"]] = info["category_id"] + self.num_things
+                    semantic_seg[semantic_seg == info["id"]] = info["category_id"] + self.num_things + 1 # Add 1 to make room for 0 class
             else:
                 semantic_seg[semantic_seg == info["id"]] = 0
         return semantic_seg, panoptic_seg, segments_info
@@ -69,8 +69,8 @@ class SemanticSegmentor():
             "stuff_classes": self.metadata.stuff_classes,
             "thing_colors": self.metadata.thing_colors,
             "stuff_colors": self.metadata.stuff_colors,
-            "thing_dataset_id_to_contiguous_id": self.metadata.thing_dataset_id_to_contiguous_id,
-            "stuff_dataset_id_to_contiguous_id": self.metadata.stuff_dataset_id_to_contiguous_id
+            # Recreate this one since we want 0 to be the null class.
+            "dataset_id_to_class": {0: "None"}.update({i+1: c for i, c in enumerate(self.metadata.thing_classes + self.metadata.stuff_classes)}),
         }
         
         json_file_path = f"{data}/panoptic_classes.json"

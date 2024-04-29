@@ -197,9 +197,16 @@ class TetonNerfModel(NerfactoModel):
         loss_dict = super().get_loss_dict(outputs, batch, metrics_dict)
         
         # semantic loss
+        semantics_pred = outputs["semantics"]
+        print(f"semantics prediction shape: {semantics_pred.shape}")
+        semantics_gt = batch["semantics"][..., 0].long().to(self.device)
+        print(f"Ground truth semantics shape: {semantics_gt.shape}")      
+        valid_mask = semantics_gt != 0 # 0 is the null class so no supervision on these
+        print(f"Non-zero elements: {torch.sum(valid_mask)}")
+        
         if self.config.use_semantics:
             loss_dict["semantics_loss"] = self.config.semantic_loss_weight * self.cross_entropy_loss(
-                outputs["semantics"], batch["semantics"][..., 0].long().to(self.device))
+                semantics_pred[valid_mask], semantics_gt[valid_mask])
             
         # Add depth-related losses if using depth supervision
         if self.training and self.config.use_depth:
