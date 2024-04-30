@@ -34,11 +34,10 @@ class TetonNerfDataset(InputDataset):
             ).view(1, 1, -1)
         
         self.use_monocular_depth = use_monocular_depth
+        self.split = dataparser_outputs.metadata["split"]
+        self.depth_filenames = self.metadata["depth_filenames"]
+        self.depth_unit_scale_factor = self.metadata["depth_unit_scale_factor"]
 
-        # Depth image handling
-        self.depth_filenames = self.metadata.get("depth_filenames")
-        self.depth_unit_scale_factor = self.metadata.get("depth_unit_scale_factor", 1.0)
-        
         if self.use_monocular_depth:
             assert len(dataparser_outputs.image_filenames) > 0 and (
             "depth_filenames" in dataparser_outputs.metadata.keys()
@@ -47,11 +46,14 @@ class TetonNerfDataset(InputDataset):
             
             self.confidence_filenames = self.metadata.get("confidence_filenames")
             self._generate_depth_images(dataparser_outputs)
+        
+        self.depth_filenames = self.metadata["depth_filenames"]
+        self.depth_unit_scale_factor = self.metadata["depth_unit_scale_factor"]
 
 
     def _generate_depth_images(self, dataparser_outputs):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        cache = dataparser_outputs.image_filenames[0].parent / "depths.npy"
+        cache = dataparser_outputs.image_filenames[0].parent / f"{self.split}_depths.npy"
         
         if cache.exists():
             print("Loading pseudodata depth from cache!")
@@ -108,20 +110,24 @@ class TetonNerfDataset(InputDataset):
                 
             self.depths = torch.stack(depth_tensors)
             np.save(cache, self.depths.cpu().numpy())
-
+            
             # Delete some stuff to avoid exceeding GPU memory
             del depth_tensors, image_processor, model
             torch.cuda.empty_cache()
             gc.collect()
-            self.depth_filenames = None
+        dataparser_outputs.metadata["depth_filenames"] = None
+        dataparser_outputs.metadata["depth_unit_scale_factor"] = 1.0
+        self.metadata["depth_filenames"] = None
+        self.metadata["depth_unit_scale_factor"] = 1.0
+        self.depth_filenames = None
             
         # Save filename and index to later retrieve correspondng depth image from dataset since dataparser_outputs removes some images due to high blur score
-        itd = {i: str(image_filename) for i, image_filename in enumerate(dataparser_outputs.image_filenames)}
+        self.depth_index_to_filename = {i: str(image_filename) for i, image_filename in enumerate(dataparser_outputs.image_filenames)}
         data_dir = str(dataparser_outputs.image_filenames[0].parent.parent)
         json_name = data_dir + "/index_to_depth.json"
         if not os.path.exists(json_name):
             with open(json_name, "w") as outfile: 
-                json.dump(itd, outfile)
+                json.dump(self.depth_index_to_filename, outfile)
 
     def compute_scale_shift(self, monocular_depth, lidar_depth, mask):
         monocular_flat = monocular_depth[mask].flatten()
@@ -158,6 +164,10 @@ class TetonNerfDataset(InputDataset):
         image_idx = data["image_idx"]
         if self.depth_filenames is None:
             depth_image = self.depths[image_idx]
+            depth_image[torch.isnan(depth_image)] = 0
+            depth_image_filename = self.depth_index_to_filename[image_idx]
+            image_filename = self._dataparser_outputs.image_filenames[image_idx]
+            
         else:
             filepath = self.depth_filenames[image_idx]
             height = int(self._dataparser_outputs.cameras.height[image_idx])

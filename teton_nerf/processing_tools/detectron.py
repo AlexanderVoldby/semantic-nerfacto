@@ -24,32 +24,33 @@ class SemanticSegmentor():
         self.cfg = get_cfg()
         self.cfg.merge_from_file(model_zoo.get_config_file("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml"))
         self.cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-PanopticSegmentation/panoptic_fpn_R_101_3x.yaml")
-        
-        # Reduce the number of classes the model is using
-        self.expected_classes = {"curtain", "door-stuff", "mirror-stuff", "pillow", "shelf", "stairs",
-                            "table", "window", "ceiling", "floor", "floor-wood" "wall", "rug",
-                          "chair", "couch", "bed", "dining table", "toilet", "tv"}
-        
-        # self.cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(expected_stuff) + len(expected_things)
-        # self.metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0]).set(thing_classes=expected_things, stuff_classes=expected_stuff)
         self.metadata = MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0])
         self.predictor = DefaultPredictor(self.cfg)
-        self.idx_to_class = {i: c for i, c in enumerate(self.metadata.thing_classes + self.metadata.stuff_classes)}
-        self.num_things = len(self.metadata.thing_classes) + 1
-        self.num_stuff = len(self.metadata.stuff_classes)
         
+        # Reduce the number of classes the model is using
+        self.expected_classes = ["none", "curtain", "door-stuff", "mirror-stuff", "pillow", "shelf", "stairs",
+                            "table", "window", "ceiling", "floor", "floor-wood", "wall", "rug",
+                          "chair", "couch", "bed", "dining table", "toilet", "tv"]
+        self.new_class_to_idx = {c: i for i, c in enumerate(self.expected_classes)}
+        self.idx_to_old_thing = {i: c for i, c in enumerate(self.metadata.thing_classes)}
+        self.idx_to_old_stuff = {i: c for i, c in enumerate(self.metadata.stuff_classes)}
+
     def predict(self, image):
         panoptic_seg, segments_info = self.predictor(image)["panoptic_seg"]
         # We are doing semantic segmentation so we simply want to map the panoptic ID to a class ID:
         semantic_seg = panoptic_seg.cpu().numpy().copy()
         for info in segments_info:
-            if self.idx_to_class[info["category_id"]] in self.expected_classes:
-                if info["isthing"]:
-                    semantic_seg[semantic_seg == info["id"]] = info["category_id"] + 1 # Add 1 to make room for 0 class
-                else:
-                    semantic_seg[semantic_seg == info["id"]] = info["category_id"] + self.num_things + 1 # Add 1 to make room for 0 class
+            
+            if info["isthing"]:
+                _class = self.idx_to_old_thing[info["category_id"]]
+            else:
+                _class = self.idx_to_old_stuff[info["category_id"]]
+            
+            if _class in self.expected_classes:
+                semantic_seg[semantic_seg == info["id"]] = self.new_class_to_idx[_class]
             else:
                 semantic_seg[semantic_seg == info["id"]] = 0
+                
         return semantic_seg, panoptic_seg, segments_info
     
     def visualize(self, image, panoptic_segmentation, segments_info, filename):

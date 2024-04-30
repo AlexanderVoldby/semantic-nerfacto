@@ -223,6 +223,7 @@ def generate_point_cloud(
                 sys.exit(1)
             rgba = pipeline.model.get_rgba_image(outputs, rgb_output_name)
             depth = outputs[depth_output_name]
+            print(f"Median depth value used for scaling pointcloud {torch.median(depth)}")
             if normal_output_name is not None:
                 if normal_output_name not in outputs:
                     CONSOLE.rule("Error", style="red")

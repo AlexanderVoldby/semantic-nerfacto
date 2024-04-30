@@ -6,6 +6,7 @@ from typing import Dict, List, Literal, Tuple, Type
 
 import numpy as np
 import torch
+from PIL import Image
 from torch.nn import Parameter
 
 
@@ -23,6 +24,7 @@ from nerfstudio.model_components.losses import DepthLossType, depth_loss, depth_
 from nerfstudio.data.dataparsers.base_dataparser import Semantics
 from nerfstudio.model_components.renderers import SemanticRenderer
 from nerfstudio.models.nerfacto import NerfactoModel, NerfactoModelConfig
+from nerfstudio.utils import profiler
 
 
 @dataclass
@@ -38,13 +40,13 @@ class TetonNerfModelConfig(NerfactoModelConfig):
     # Semantics stuff
     use_semantics: bool = True
     """Whether to train semantic labels"""
-    semantic_loss_weight: float = 1.0
+    semantic_loss_weight: float = 1e-3
     """Multiplier for the semantic loss"""
     pass_semantic_gradients: bool = False
     
     # Depth stuff
     depth_loss_mult: float = 1e-3
-    is_euclidean_depth: bool = False
+    is_euclidean_depth: bool = True
     depth_sigma: float = 0.01
     should_decay_sigma: bool = False
     starting_depth_sigma: float = 0.2
@@ -168,7 +170,7 @@ class TetonNerfModel(NerfactoModel):
         # Add depth-related metrics if using depth supervision
         if self.training and self.config.use_depth:
             assert "depth_image" in batch
-            depth_image = batch["depth_image"].to(self.device)
+            depth_image = batch["depth_image"].unsqueeze(1).to(self.device)
             if self.config.depth_loss_type in (DepthLossType.DS_NERF, DepthLossType.URF):
                 sigma = self._get_sigma().to(self.device)
                 depth_loss_value = 0
@@ -228,15 +230,18 @@ class TetonNerfModel(NerfactoModel):
         
         # semantics
         if self.config.use_semantics:
-            semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1)
-            images_dict["semantics_colormap"] = self.colormap.to(self.device)[semantic_labels]
-            
-        images_dict["mask"] = batch["mask"].repeat(1, 1, 3).to(self.device)
-        
+            semantic_labels = torch.argmax(torch.nn.functional.softmax(outputs["semantics"], dim=-1), dim=-1).int()
+            gt_semantics = batch["semantics"].squeeze().to(self.device).int()
+            cmap = self.colormap.to(self.device)
+            semantic_colormap = cmap[gt_semantics]
+            gt_semantic_colormap = cmap[semantic_labels]
+            image_tensor = torch.cat([semantic_colormap, gt_semantic_colormap], dim=1)
+            images_dict["semantics_colormap"] = image_tensor
+
         # Appends ground truth depth to the depth image
-        ground_truth_depth = batch["depth_image"].to(self.device)
-        if not self.config.is_euclidean_depth:
-            ground_truth_depth = ground_truth_depth * outputs["directions_norm"]
+        ground_truth_depth = batch["depth_image"].to(self.device).unsqueeze(2)
+        # if not self.config.is_euclidean_depth:
+            # ground_truth_depth = ground_truth_depth * outputs["directions_norm"]
 
         ground_truth_depth_colormap = colormaps.apply_depth_colormap(ground_truth_depth)
         predicted_depth_colormap = colormaps.apply_depth_colormap(

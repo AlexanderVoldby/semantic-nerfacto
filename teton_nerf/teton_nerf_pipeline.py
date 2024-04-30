@@ -136,7 +136,7 @@ class TetonNerfPipeline(VanillaPipeline):
             torch.from_numpy(poses)
         )
         points = poses[:, :3, 3].numpy()
-
+        points *= 1 # Try to scale to fit scene better
         torch.cuda.empty_cache()
         
         if checkbox.value:
@@ -216,7 +216,7 @@ class TetonNerfPipeline(VanillaPipeline):
         if self.config.use_regnerf_semantics_loss:
             regnerf_loss = self.apply_regnerf_loss(step, semantics_patches)
             loss_dict["regnerf_semantics_loss"] = self.config.regnerf_semantics_loss_mult * regnerf_loss
-        
+
         return model_outputs, loss_dict, metrics_dict
     
     

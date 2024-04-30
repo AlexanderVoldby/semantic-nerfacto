@@ -24,6 +24,8 @@ from nerfstudio.data.utils.dataparsers_utils import (
 from nerfstudio.utils.io import load_from_json
 from nerfstudio.utils.rich_utils import CONSOLE
 
+from teton_nerf.processing_tools.detectron import SemanticSegmentor
+
 MAX_AUTO_RESOLUTION = 1600
 
 
@@ -38,6 +40,11 @@ class TetonDataparserConfig(NerfstudioDataParserConfig):
 class TetonDataparser(Nerfstudio):
     
     config: TetonDataparserConfig
+    
+    def __init__(self, config: NerfstudioDataParserConfig):
+        super().__init__(config)
+        segmentor = SemanticSegmentor()
+        self.semantic_classes = segmentor.expected_classes
     
     def _generate_dataparser_outputs(self, split="train"):
         assert self.config.data.exists(), f"Data directory {self.config.data} does not exist."
@@ -370,20 +377,26 @@ class TetonDataparser(Nerfstudio):
         # --- semantics ---
         semantics = None
         if (self.config.data / "panoptic_classes.json").exists():
+            # Initialize segmentor to get metadata
+            
 
             filenames = [
                 Path(str(image_filename).replace(images_folder, segmentations_folder).replace(".jpg", ".png"))
                 for image_filename in image_filenames
             ]
             panoptic_classes = load_from_json(self.config.data / "panoptic_classes.json")
-            thing_classes = panoptic_classes["thing_classes"]
-            stuff_classes = panoptic_classes["stuff_classes"]
-            classes = thing_classes + stuff_classes
-            thing_colors = torch.tensor(panoptic_classes["thing_colors"], dtype=torch.float32) / 255.0
-            stuff_colors = torch.tensor(panoptic_classes["stuff_colors"], dtype=torch.float32) / 255.0
-            colors = torch.cat((thing_colors, stuff_colors), 0)
+            # thing_classes = panoptic_classes["thing_classes"]
+            # stuff_classes = panoptic_classes["stuff_classes"]
+            # classes = thing_classes + stuff_classes
+            classes = self.semantic_classes
+            # thing_colors = torch.tensor(panoptic_classes["thing_colors"], dtype=torch.float32) / 255.0
+            # stuff_colors = torch.tensor(panoptic_classes["stuff_colors"], dtype=torch.float32) / 255.0
+            # colors = torch.cat((thing_colors, stuff_colors), 0)
+            colors = [panoptic_classes["thing_colors"][i] for i in range(len(classes))]
+            colors[0] = [0, 0, 0] # None class is black but we don't supervise this class.
+            colors = torch.tensor(colors, dtype=torch.float32) / 255.0
             
-            semantics = Semantics(filenames=filenames, classes=classes, colors=colors)
+            semantics = Semantics(filenames=filenames, classes=classes, colors=torch.Tensor(colors))
 
 
         dataparser_outputs = DataparserOutputs(
@@ -398,6 +411,7 @@ class TetonDataparser(Nerfstudio):
                 "depth_unit_scale_factor": self.config.depth_unit_scale_factor,
                 "confidence_filenames": confidence_filenames if len(confidence_filenames) > 0 else None,
                 "semantics": semantics,
+                "split": split,
                 **metadata,
             },
         )
