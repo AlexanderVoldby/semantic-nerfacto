@@ -88,8 +88,8 @@ class TetonNerfModel(NerfactoModel):
         appearance_embedding_dim = self.config.appearance_embed_dim if self.config.use_appearance_embedding else 0
 
         if self.semantics is not None:
-            num_classes = len(self.semantics.classes)
-        else: num_classes = 0
+            self.num_classes = len(self.semantics.classes)
+        else: self.num_classes = 0
         
         # Fields
         self.field = NerfactoField(
@@ -111,7 +111,7 @@ class TetonNerfModel(NerfactoModel):
             # Add semantics to field
             use_semantics=self.config.use_semantics,
             pass_semantic_gradients=self.config.pass_semantic_gradients,
-            num_semantic_classes=num_classes
+            num_semantic_classes=self.num_classes
         )
 
         # Add semantic renderer

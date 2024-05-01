@@ -22,12 +22,13 @@ class NeRFStudioPipeline:
             self.nerf_process.process_data(local_zip_path, processed_output)
         else:
             print(f"Processed data already exists for {os.path.basename(local_zip_path)}")
-        
-        self.Detectron.add_segmentation(processed_output)
 
-        checkpoint_output += f"_{self.name}"
         if self.train:
-            self.nerf_process.train(processed_output, checkpoint_output, options=self.options, model=model)
+            print(f"Training model {checkpoint_output}")
+            try:
+                self.nerf_process.train(processed_output, checkpoint_output, options=self.options, model=model)
+            except Exception as e:
+                print(f"Error: {e}")
 
     def train_raw_data(self, model):
         raw_data_path = "data/"

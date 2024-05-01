@@ -17,7 +17,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from teton_nerf.teton_datamanager import TetonNerfDatamanagerConfig
 from teton_nerf.teton_nerf import TetonNerfModel, TetonNerfModelConfig
 from teton_nerf.utils.random_train_pose import random_train_pose
-from teton_nerf.utils.get_pointcloud import generate_pointcloud, generate_point_cloud, generate_pointcloud_advanced
+from teton_nerf.utils.get_pointcloud import generate_point_cloud
 
 from nerfstudio.data.datamanagers.base_datamanager import (
     DataManager,
@@ -126,7 +126,10 @@ class TetonNerfPipeline(VanillaPipeline):
         # TODO: add point cloud to the viewer
         # take the depth images and backproject them to 3D points
         
-        pcd = generate_point_cloud(pipeline=self, bounding_box_min=(-1, -1, -1), bounding_box_max=(1, 1, 1))
+        pcd = generate_point_cloud(pipeline=self,
+                                   remove_outliers=False,
+                                   bounding_box_min=(-2, -2, -2),
+                                   bounding_box_max=(2, 2, 2))
 
         colors = np.asarray(pcd.colors)
         points = np.asarray(pcd.points)
@@ -188,32 +191,31 @@ class TetonNerfPipeline(VanillaPipeline):
             ray_bundle_patches = ray_bundle_patches.flatten()
 
             model_outputs_patches = self.model(ray_bundle_patches)
-            rgb_patches = (
-                model_outputs_patches["rgb"]
-                .reshape(self.config.patch_resolution, self.config.patch_resolution, self.config.num_patches, 3)
-                .permute(2, 0, 1, 3)
-            )  # (num_patches, patch_resolution, patch_resolution, 3)
+
+        if self.config.use_regnerf_depth_loss:
             depth_patches = (
                 model_outputs_patches["depth"]
                 .reshape(self.config.patch_resolution, self.config.patch_resolution, self.config.num_patches, 1)
                 .permute(2, 0, 1, 3)[..., 0]
             )  # (num_patches, patch_resolution, patch_resolution)
-            # Hardcode 134 as dimension since this is the number of classes
-            semantics_patches = (
-                model_outputs_patches["semantics"]
-                .reshape(self.config.patch_resolution, self.config.patch_resolution, self.config.num_patches, 134)
-                .permute(2, 0, 1, 3)[..., 0]
-            )  # (num_patches, patch_resolution, patch_resolution)
-
-        if self.config.use_regnerf_depth_loss:
             regnerf_loss = self.apply_regnerf_loss(step, depth_patches)
             loss_dict["regnerf_depth_loss"] = self.config.regnerf_depth_loss_mult * regnerf_loss
             
         if self.config.use_regnerf_rgb_loss:
+            rgb_patches = (
+                model_outputs_patches["rgb"]
+                .reshape(self.config.patch_resolution, self.config.patch_resolution, self.config.num_patches, 3)
+                .permute(2, 0, 1, 3)
+            )
             regnerf_loss = self.apply_regnerf_loss(step, rgb_patches)
             loss_dict["regnerf_rgb_loss"] = self.config.regnerf_rgb_loss_mult * regnerf_loss
             
         if self.config.use_regnerf_semantics_loss:
+            semantics_patches = (
+                model_outputs_patches["semantics"]
+                .reshape(self.config.patch_resolution, self.config.patch_resolution, self.config.num_patches, self.model.num_classes)
+                .permute(2, 0, 1, 3)[..., 0]
+            )  # (num_patches, patch_resolution, patch_resolution)
             regnerf_loss = self.apply_regnerf_loss(step, semantics_patches)
             loss_dict["regnerf_semantics_loss"] = self.config.regnerf_semantics_loss_mult * regnerf_loss
 

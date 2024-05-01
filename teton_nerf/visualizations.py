@@ -35,7 +35,7 @@ def visualize_depth_before_and_after_scaling(image, lidar_depth, depth, scaled_d
     plt.colorbar(axs[1].imshow(depth.cpu()), ax=axs[1])
 
     axs[2].imshow(scaled_depth.cpu())
-    axs[2].set_title("Scaled monocular depth")
+    axs[2].set_title("Combined monocular and LiDAR")
     axs[2].axis("off")
     plt.colorbar(axs[2].imshow(scaled_depth.cpu()), ax=axs[2])
 
