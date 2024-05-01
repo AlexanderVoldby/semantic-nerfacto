@@ -74,13 +74,13 @@ class NeRFStudioPipeline:
 
         with Pool(4) as pool:
             for name, config in zip(dataset_names, configs):
-                output_video = f"renders/{name}.mp4"
+                output_name = f"renders/{name}_{model}"
                 output_dir = f"exports/{name}"
                 
-                if do_render and not os.path.exists(output_video):
-                    pool.apply_async(self.nerf_process.render, args=(config, output_video))
+                if do_render and not os.path.exists(output_name):
+                    pool.apply_async(self.nerf_process.render, args=(config, output_name))
                 elif do_render:
-                    print(f"Video already rendered for {name}")
+                    print(f"Dataset already rendered for {name}")
                 
                 if export_mode is not None and not os.path.exists(output_dir):
                     print(f"Exporting to {output_dir}")
@@ -107,7 +107,7 @@ def main(model, folder_id, checkpoints, data, no_train, render, export, name, op
     train = not no_train
     print(f"Training set to {train}")
     options = " ".join(option)
-    pipeline = NeRFStudioPipeline(train, name,  options)
+    pipeline = NeRFStudioPipeline(train, name, options)
     if folder_id:
         checkpoint_folder = pipeline.download_and_train(folder_id, model)
     elif checkpoints:
