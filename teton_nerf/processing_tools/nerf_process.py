@@ -24,7 +24,7 @@ class NeRFProcess:
 
     def render(self, checkpoint: str, output_path: str):
         render_path = "~/Desktop/Bachelorprojekt/nerfstudio/nerfstudio/scripts/render.py"
-        process = subprocess.run([f"{self.global_env} {render_path} interpolate --load-config {checkpoint} --output-path {output_path} --rendered-output-names rgb depth semantics_colormap --frame-rate 30"], shell=True)
+        process = subprocess.run([f"{self.global_env} {render_path} dataset --load-config {checkpoint} --output-path {output_path} --split test"], shell=True)
         self.assert_process(process)
         return process
     
