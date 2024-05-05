@@ -87,25 +87,26 @@ class TetonNerfDataset(InputDataset):
                     # Fit the predicted_depth to the LiDAR depth
                     scale, shift = self.compute_scale_shift(prediction, depth_tensor, valid_mask)
                     depth = scale * prediction + shift
-                    # Convert to LiDAR depth where the depth is confident
-                    depth[valid_mask] = depth_tensor[valid_mask]
-                    
-                    # Save every 10th image
-                    if i % 10 == 0:
-                        name = os.path.basename(image_filename)
-                        folder = str(image_filename.parent.parent) + "/visualizations"
-                        if not os.path.exists(folder):
-                            os.mkdir(folder)
-                        saved_name = folder + "/" + name
+                    if torch.sum(torch.isnan(depth)) > 0:
+                        depth = depth_tensor
+                    else:
+                        # Convert to LiDAR depth where the depth is confident
+                        depth[valid_mask] = depth_tensor[valid_mask]
 
-                        visualize_depth_before_and_after_scaling(
-                            pil_image,
-                            depth_tensor,
-                            prediction,
-                            depth,
-                            valid_mask,
-                            saved_name
-                        )
+                    name = os.path.basename(image_filename)
+                    folder = str(image_filename.parent.parent) + "/visualizations"
+                    if not os.path.exists(folder):
+                        os.mkdir(folder)
+                    saved_name = folder + "/" + name
+
+                    visualize_depth_before_and_after_scaling(
+                        pil_image,
+                        depth_tensor,
+                        prediction,
+                        depth,
+                        valid_mask,
+                        saved_name
+                    )
                     depth_tensors.append(depth)
                 
             self.depths = torch.stack(depth_tensors)
@@ -164,9 +165,6 @@ class TetonNerfDataset(InputDataset):
         image_idx = data["image_idx"]
         if self.depth_filenames is None:
             depth_image = self.depths[image_idx]
-            depth_image[torch.isnan(depth_image)] = 0
-            depth_image_filename = self.depth_index_to_filename[image_idx]
-            image_filename = self._dataparser_outputs.image_filenames[image_idx]
             
         else:
             filepath = self.depth_filenames[image_idx]
