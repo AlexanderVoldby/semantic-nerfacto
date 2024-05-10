@@ -72,11 +72,11 @@ class TetonNerfPipelineConfig(VanillaPipelineConfig):
     """Whether to use regularization on RGB patches"""
     use_regnerf_semantics_loss: bool = True
     """Whether to use regularization on semantics patches"""
-    regnerf_depth_loss_mult = 1
+    regnerf_depth_loss_mult: float = 1.0
     """Multiplier on patch-based depth loss"""
-    regnerf_rgb_loss_mult = 1
+    regnerf_rgb_loss_mult: float = 1.0
     """Multiplier on patch-based rgb loss"""
-    regnerf_semantics_loss_mult = 1
+    regnerf_semantics_loss_mult: float = 1.0
     """Multiplier on patch-based semantics loss"""
 
 
