@@ -29,7 +29,6 @@ Setting all of the above flags to flase will result in the nerfacto model.
 ns-train teton-nerf --viewer.websocket-host 10.0.0.93 --viewer.websocket-port 8888 --pipeline.use-regnerf-depth-loss False --pipeline.use-regnerf-rgb-loss False --pipeline.use-regnerf-semantics-loss False --pipeline.model.use-semantics False --pipeline.model.use-depth False --data data/process-data/USZ-internal-med-L14/
 ```
 
-[x] TODO: (rename semantic_depth_nerfacto to teton_nerfacto and implement semantics, depth, reglosses as flags).
 
 ## Process-data
 Installing the method also install the new command ns-process-teton (better name necessary?). This works like ns-process-data, but has different configureable additions, such as the addition of semantic segmentations and confidence maps for the depth images. It is used similar to ns-process-data:
@@ -39,12 +38,3 @@ ns-process-teton polycam --data <Polycam un-processed dataset> --output-dir <out
 ```
 
 The three flags are all True by default and setting them all with --no prefixed will perform the same as ns-process-data polycam.
-
-[x] TODO: add scripts to download from google drive
-[x] TODO: add script to ns-process-data after downloading the data 
-[x] TODO: edit such that we also compute semantic segmentations and depth + format the depth maps
-
-
-[x] TODO: make a new ns-process-data teton entry that is basically the same as the nerfstudio/nerfstudio/scripts/process_data.py [ProcessPolycam] but also processes the confidence maps
-
-[x] TODO: put everything important in a single model class called TetonNerf something, and make everything a configurable flag. It is kinda confusion with nerf-depth, nerf-depth-seg, nerf-seg... 
